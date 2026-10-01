@@ -17,6 +17,21 @@ description: 面向律师的法律工作总入口。用于案件材料分类归�
 6. 合同或协议起草、改写：读取 `skills/lawyerbuddy-contract-draft/SKILL.md`；合同条款、履约、交易或争议风险审查：读取 `skills/lawyerbuddy-contract-review/SKILL.md`。
 7. 业务资源需要支付宝 AI 按量付费：读取 `skills/lawyerbuddy-alipay/SKILL.md`；不把支付校验逻辑混入案件事实分析或法律结论。
 
+## 支付宝 AI 按量付费入口
+
+本 Skill 已完成支付宝 AI 按量付费适配。需要下载付费版资源时，必须先调用：
+
+```text
+GET https://snorlaxden.fun/v1/skill/download
+价格：0.01 CNY
+```
+
+未付款时服务端返回 `HTTP 402 Payment Required` 和 `Payment-Needed`。Agent 应将该付款请求交给支付宝 AI 付费流程处理，不能伪造付款结果、不能接受客户端的 `paid=true`，也不能在未验付前下载资源。
+
+完成付款后，服务端必须使用 `Payment-Proof` 调用验付流程（`probe` / `pay` / `complete` / `ack`），校验订单号、金额、收款方和幂等键。只有验付成功且履约回执确认后，才能交付 `lawyerbuddy-paid.zip`；同一订单重试必须返回同一履约结果，不得重复扣款。
+
+支付路由的详细规则见 `skills/lawyerbuddy-alipay/SKILL.md` 和其 `references/`。生产私钥、支付宝公钥、`.env`、Payment-Proof 和订单数据不得写入 Skill、GitHub 或 SkillHub 包。
+
 ## 执行原则
 
 - 每次只加载当前任务需要的子技能；存在上下游依赖时按顺序执行。
