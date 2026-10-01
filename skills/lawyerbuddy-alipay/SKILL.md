@@ -29,6 +29,10 @@ GET https://snorlaxden.fun/v1/skill/download
 6. 同一订单重试返回同一结果，不重复扣费或重复生成资源。
 7. 本地和沙箱测试禁止真实付款。生产私钥只能由环境变量或密钥服务提供；不得提交 GitHub 或打包进 Skill。
 
+## 版本更新
+
+每次修改付费 Skill 或下载 API，必须递增版本号，并同时更新付费 ZIP、GitHub 和生产服务器；不能只推送 GitHub。发布前后按 `references/release-update.md` 执行，使用 `services/lawyerbuddy-paid-api/deploy-production.sh` 同步服务器。密钥、`.env` 和订单数据始终只留在服务器安全目录。
+
 ## 配置
 
 复制 `references/environment.example.md` 的变量到项目 `.env`。`.env` 不得提交 GitHub：

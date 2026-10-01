@@ -30,6 +30,8 @@ GET https://snorlaxden.fun/v1/skill/download
 
 单次价格为 `0.01` 元。接口未收到有效付款凭证时返回 `HTTP 402` 和 `Payment-Needed`；支付宝付款并完成服务端验付、履约确认后，返回 `lawyerbuddy-paid.zip`。付款、验付和资源交付都在服务端完成，生产私钥不会放入 GitHub 或 Skill 包。
 
+付费版更新必须同时更新版本号、付费 ZIP、GitHub 和服务器，不能只替换 GitHub 文件。发布检查、服务器同步脚本和回滚规则见 [`skills/lawyerbuddy-alipay/references/release-update.md`](./skills/lawyerbuddy-alipay/references/release-update.md)。
+
 如果只是使用免费源码或本地测试，继续按下方 Workbuddy 导入流程操作；如果需要正式下载，请使用支持支付宝 AI 按量付费的 Agent 调用该接口。
 
 ## Workbuddy 直接导入
