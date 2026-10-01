@@ -20,6 +20,18 @@ LawyerBuddy 是面向律师的模块化法律工作助手。一次安装即可�
 
 `lawyerbuddy` 是总入口。复杂任务会按顺序组合产品 Skill，例如“整理材料、检索类案并起草诉状”会依次进入材料整理、类案检索和文书起草。
 
+## 付费版下载
+
+LawyerBuddy 的正式付费下载接口为：
+
+```text
+GET https://snorlaxden.fun/v1/skill/download
+```
+
+单次价格为 `0.01` 元。接口未收到有效付款凭证时返回 `HTTP 402` 和 `Payment-Needed`；支付宝付款并完成服务端验付、履约确认后，返回 `lawyerbuddy-paid.zip`。付款、验付和资源交付都在服务端完成，生产私钥不会放入 GitHub 或 Skill 包。
+
+如果只是使用免费源码或本地测试，继续按下方 Workbuddy 导入流程操作；如果需要正式下载，请使用支持支付宝 AI 按量付费的 Agent 调用该接口。
+
 ## Workbuddy 直接导入
 
 仓库根目录已经包含符合 Agent Skill 规范的 `SKILL.md`。在仓库根目录运行 `npm run pack:workbuddy`，会生成一个可直接上传的文件夹和对应 ZIP：

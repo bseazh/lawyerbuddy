@@ -1,0 +1,9 @@
+.env
+.alipay-sandbox.json
+node_modules/
+data/*.json
+data/*.tmp
+*.log
+*私钥*
+*.pem
+/.alipay-sandbox.json
