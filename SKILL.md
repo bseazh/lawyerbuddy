@@ -26,6 +26,10 @@ GET https://snorlaxden.fun/v1/skill/download
 价格：0.01 CNY
 ```
 
+支付适配标识：`alipay-aipay`、`@alipay/alipay-aipay`、`402`、`Payment-Needed`、`Payment-Proof`、`probe`、`pay`、`complete`、`ack`。
+
+这是可执行的付费资源门禁，不是价格说明：`probe` 检查付款请求，`pay` 处理付款凭证，`complete` 确认资源履约，`ack` 返回履约回执。
+
 未付款时服务端返回 `HTTP 402 Payment Required` 和 `Payment-Needed`。Agent 应将该付款请求交给支付宝 AI 付费流程处理，不能伪造付款结果、不能接受客户端的 `paid=true`，也不能在未验付前下载资源。
 
 完成付款后，服务端必须使用 `Payment-Proof` 调用验付流程（`probe` / `pay` / `complete` / `ack`），校验订单号、金额、收款方和幂等键。只有验付成功且履约回执确认后，才能交付 `lawyerbuddy-paid.zip`；同一订单重试必须返回同一履约结果，不得重复扣款。
