@@ -22,7 +22,7 @@ export LB_PAID_ZIP=/绝对路径/lawyerbuddy-paid-v1.8.4-paid.1.zip
 ./services/lawyerbuddy-paid-api/deploy-production.sh
 ```
 
-脚本会上传 API 源码和付费 ZIP，保留服务器 `/etc/lawyerbuddy/lawyerbuddy-api.env` 和密钥目录，重启服务并检查 `/health`。
+脚本会上传 API 源码和付费 ZIP，在 `/home/ubuntu/Project/lawyerbuddy-api/artifacts/` 保存版本化资源，只更新服务器 `/etc/lawyerbuddy/lawyerbuddy-api.env` 中的 `RESOURCE_FILE` 一项（其他环境变量和密钥不变），重启服务并检查 `/health`。部署账户必须已配置免交互执行 `sudo systemctl restart lawyerbuddy-api` 及更新该 env 文件的权限；若没有权限，脚本会停止，不会尝试修改 sudo 规则。
 
 ## 推送与验收
 

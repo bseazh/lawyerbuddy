@@ -1,6 +1,6 @@
 {
   "name": "lawyerbuddy",
-  "version": "1.8.7",
+  "version": "1.8.8",
   "description": "LawyerBuddy 法律工作助手套件：总路由、支付适配、八个产品 Skill 与 38 个内部中文法律能力。",
   "repository": {
     "type": "git",
