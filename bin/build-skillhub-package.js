@@ -128,10 +128,18 @@ try {
   const disallowed = files.filter((file) => !supportedExtensions.has(path.extname(file).toLowerCase()));
   if (disallowed.length) throw new Error(`发现不支持的文件：${disallowed.join("、")}`);
 
-  run("zip", ["-qr", archive, "."], { cwd: bundle });
+  // SkillHub 的付费预检会取文件列表中第一个 basename 为 SKILL.md 的文件。
+  // 包内含多个子 Skill 的 SKILL.md，因此必须把唯一根入口排在 ZIP 第一项。
+  const archiveFiles = ["SKILL.md", ...files.filter((file) => file !== "SKILL.md").sort()];
+  run("zip", ["-q", archive, ...archiveFiles], { cwd: bundle });
   markUtf8Filenames(archive);
   const zipEntries = run("unzip", ["-Z1", archive]).split(/\r?\n/).filter(Boolean);
-  if (!zipEntries.includes("SKILL.md")) throw new Error("ZIP 顶层缺少 SKILL.md");
+  if (zipEntries[0] !== "SKILL.md") {
+    throw new Error(`ZIP 第一项必须是根 SKILL.md，实际为：${zipEntries[0] || "(空)"}`);
+  }
+  if (zipEntries.filter((entry) => entry === "SKILL.md").length !== 1) {
+    throw new Error("ZIP 必须且仅能包含一个根目录 SKILL.md；嵌套子技能文件名需另行处理");
+  }
   if (zipEntries.some((entry) => path.basename(entry).toUpperCase() === "LICENSE")) {
     throw new Error("ZIP 中发现不允许上传的 LICENSE 文件");
   }

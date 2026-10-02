@@ -59,7 +59,7 @@ dist/lawyerbuddy-workbuddy-v1.8.2/
 
 面向律师的导入步骤和可复制提示词见[《LawyerBuddy 使用指南》](./docs/使用指南.md)，包含案件材料整理、初稿确认和文书起草流程。
 
-SkillHub 上传请使用专用精简包，不要直接上传整个开发仓库（其中可能含本地 Python 环境和平台不支持的文件）。在仓库根目录运行 `npm run pack:skillhub`，再上传 `dist/lawyerbuddy-skillhub-v1.8.2/` 文件夹或同名 ZIP。打包器会排除 Excel、Word 模板、YAML 配置、Python 字节码、测试和本地环境；Word 模板已有对应 Markdown 全文，精简包中的 Skill 会按该内容回退。打包器会检查根目录 `SKILL.md` 元数据、文件类型，并确保文件数不超过 200。内置案由表已转换为 JSON，不会因平台禁止 Excel 而失效。
+SkillHub 上传请使用专用精简包，不要直接上传整个开发仓库（其中可能含本地 Python 环境和平台不支持的文件）。在仓库根目录运行 `npm run pack:skillhub`，然后上传生成的 ZIP。SkillHub 的付费预检按上传文件顺序查找第一个名为 `SKILL.md` 的文件；本包含多个子技能说明，因此 ZIP 会将根目录 `SKILL.md` 放在第一项。不要解压后重新压缩，也不要直接上传文件夹，否则可能先扫描到不含付费流程的子技能。打包器会排除 Excel、Word 模板、YAML 配置、Python 字节码、测试和本地环境；Word 模板已有对应 Markdown 全文，精简包中的 Skill 会按该内容回退。打包器会检查根目录 `SKILL.md` 元数据、文件类型，并确保文件数不超过 200。内置案由表已转换为 JSON，不会因平台禁止 Excel 而失效。
 
 ## 案件材料整理流程
 

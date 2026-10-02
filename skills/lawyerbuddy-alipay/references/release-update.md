@@ -5,7 +5,7 @@
 ## 发布前
 
 1. 在仓库根目录递增 `package.json` 的 `version`，遵循 `MAJOR.MINOR.PATCH`。
-2. 更新变更说明，并运行 `npm run pack:workbuddy`、`npm run pack:skillhub`。
+2. 更新变更说明，并运行 `npm run pack:workbuddy`、`npm run pack:skillhub`。SkillHub 付费预检会按上传文件顺序选第一个 basename 为 `SKILL.md` 的文件，因此打包器强制 ZIP 顶层根 `SKILL.md` 为第一项；上传必须使用生成的 ZIP，不要上传文件夹或手工重新压缩。
 3. 生成与版本号一致的付费 ZIP，例如 `lawyerbuddy-paid-v1.8.4-paid.1.zip`。不得包含 `.env`、私钥、公钥、订单数据、`node_modules`、`.pyc` 或本地缓存。
 4. 本地执行 `npm ci`、`npm run preflight`；未配置生产密钥时只做结构检查，不伪称已完成支付宝验付。
 5. 检查 `git diff` 和 `git status`，确认没有密钥或本地配置文件。
