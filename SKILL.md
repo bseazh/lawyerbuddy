@@ -39,6 +39,87 @@ GET https://snorlaxden.fun/v1/skill/download
 
 订单必须持久化，并以 `out_trade_no` 做幂等键；同一订单重试不得重复扣费或重复履约。生产部署应将 `verifyPaymentProof` 绑定到支付宝 `alipay.aipay.agent.payment.verify`，将履约绑定到 `alipay.aipay.agent.fulfillment.confirm`。
 
+## 可执行改造说明（支付宝 AI 按量付费）
+
+以下是本 Skill 对业务服务的实际接入契约。上传到 SkillHub 的 `SKILL.md` 必须保留本节；它不是示意性的“收费说明”。生产服务端应实现等价代码，并将密钥只注入服务端环境。
+
+### 接口、依赖与价格
+
+- 接口用途：下载 LawyerBuddy 付费 Skill 资源。
+- 请求方式及路径：`GET https://snorlaxden.fun/v1/skill/download`。
+- 成功响应：HTTP 200，返回非空 `lawyerbuddy-paid.zip` 资源，并返回 `Payment-Validation`。
+- 单次价格：`0.01 CNY`，服务端固定读取，客户端不能覆盖。
+- 卖家依赖安装：`npx -y @alipay/alipay-aipay@latest install`；运行层使用 `alipay-sdk`。
+- 买家侧支付能力：由支持支付宝 AI 按量付费的 Agent 处理账单、付款和凭证重试；本 Skill 不伪造付款。
+
+### 五项服务端实现（必须全部存在）
+
+```js
+// 1) 402 账单下发：保存原始请求，创建持久化订单。
+const proof = String(req.get('Payment-Proof') || '').trim();
+if (!proof) {
+  const order = await orders.insertPending({
+    out_trade_no: createUniqueOrderNo(),
+    amount: '0.01',
+    resource_id: 'lawyerbuddy-paid-v1',
+    request_hash: hashRequest(req),
+    status: 'PENDING_PAYMENT'
+  });
+  res.set('Payment-Needed', encodeBill(order));
+  return res.status(402).json({
+    code: 'Payment-Needed',
+    out_trade_no: order.out_trade_no,
+    amount: '0.01',
+    currency: 'CNY',
+    resource_id: order.resource_id
+  });
+}
+
+// 2) 携带 Payment-Proof 重试：必须复用原订单和原请求，不能重新下单。
+const verified = await alipaySdk.exec(
+  'alipay.aipay.agent.payment.verify',
+  { bizContent: { payment_proof: proof, trade_no: req.get('X-Out-Trade-No') } }
+);
+if (!verified || verified.code !== '10000' || verified.amount !== '0.01') {
+  return res.status(402).json({ code: 'PAYMENT_REQUIRED', message: 'Payment-Proof 验证失败' });
+}
+const order = await orders.findByOutTradeNo(verified.out_trade_no);
+if (!order || order.status === 'REJECTED' || hashRequest(req) !== order.request_hash) {
+  return res.status(402).json({ code: 'ORDER_NOT_FOUND_OR_MISMATCH' });
+}
+
+// 3) 履约前的订单幂等：同一 out_trade_no 只进入一次履约。
+if (order.status !== 'FULFILLED') {
+  await orders.markPaymentVerified(order.out_trade_no, verified.trade_no);
+  const fulfillment = await alipaySdk.exec(
+    'alipay.aipay.agent.fulfillment.confirm',
+    { bizContent: { trade_no: verified.trade_no, out_trade_no: order.out_trade_no } }
+  );
+  if (!fulfillment || fulfillment.code !== '10000') {
+    return res.status(502).json({ code: 'FULFILLMENT_CONFIRM_FAILED' });
+  }
+  await orders.markFulfilled(order.out_trade_no, {
+    resource_id: order.resource_id,
+    trade_no: verified.trade_no
+  });
+}
+
+// 4) 履约回执：已履约订单重试返回缓存结果，不重复扣款或交付。
+const resource = await orders.getDeliveredResource(order.out_trade_no);
+res.set('Payment-Validation', encodeValidation(order, verified));
+return res.status(200).download(resource.path, 'lawyerbuddy-paid.zip');
+```
+
+订单存储必须是可恢复的持久化存储（生产使用数据库；本地演示可使用写入磁盘的 SQLite/JSON），并对 `out_trade_no` 建唯一约束。`insertPending`、`findByOutTradeNo`、`markPaymentVerified`、`markFulfilled` 和 `getDeliveredResource` 不能用只存在于进程内存的临时 Map 替代。付款、验付、履约或资源写入遇到网络重试时，继续使用同一 `out_trade_no` 和同一 `Payment-Proof`。
+
+### Agent 调用规则
+
+1. 先请求资源接口并检查 HTTP 状态。
+2. 收到 402 时保存完整 `Payment-Needed`、`out_trade_no` 和原始请求参数，交给官方支付宝 AI 付费能力；不能自行生成付款凭证。
+3. 用户完成付款后，使用同一接口、同一请求参数、同一订单号，并携带 `Payment-Proof` 重试。
+4. 只有收到 HTTP 200、非空资源和 `Payment-Validation`，才向用户报告交付成功。
+5. 收到验付或履约失败时，先用原订单重试或查询状态，不能让用户重复付款。
+
 未付款时服务端返回 `HTTP 402 Payment Required` 和 `Payment-Needed`。Agent 应将该付款请求交给支付宝 AI 付费流程处理，不能伪造付款结果、不能接受客户端的 `paid=true`，也不能在未验付前下载资源。
 
 完成付款后，服务端必须使用 `Payment-Proof` 调用验付流程（`probe` / `pay` / `complete` / `ack`），校验订单号、金额、收款方和幂等键。只有验付成功且履约回执确认后，才能交付 `lawyerbuddy-paid.zip`；同一订单重试必须返回同一履约结果，不得重复扣款。
