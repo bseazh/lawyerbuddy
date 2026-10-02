@@ -30,6 +30,15 @@ GET https://snorlaxden.fun/v1/skill/download
 
 这是可执行的付费资源门禁，不是价格说明：`probe` 检查付款请求，`pay` 处理付款凭证，`complete` 确认资源履约，`ack` 返回履约回执。
 
+实现文件为 `runtime/payment/alipay-aipay-adapter.js`，依赖声明为 `runtime/payment/package.json`。调用顺序必须是：
+
+1. `probe`：没有凭证时创建并持久化订单，返回 `HTTP 402` 和 `Payment-Needed`。
+2. `pay`：读取 `Payment-Proof`，调用支付宝验付接口，校验订单、金额和资源。
+3. `complete`：资源准备成功后执行履约确认；失败不得返回成功。
+4. `ack`：返回 `Payment-Validation` 和资源结果。
+
+订单必须持久化，并以 `out_trade_no` 做幂等键；同一订单重试不得重复扣费或重复履约。生产部署应将 `verifyPaymentProof` 绑定到支付宝 `alipay.aipay.agent.payment.verify`，将履约绑定到 `alipay.aipay.agent.fulfillment.confirm`。
+
 未付款时服务端返回 `HTTP 402 Payment Required` 和 `Payment-Needed`。Agent 应将该付款请求交给支付宝 AI 付费流程处理，不能伪造付款结果、不能接受客户端的 `paid=true`，也不能在未验付前下载资源。
 
 完成付款后，服务端必须使用 `Payment-Proof` 调用验付流程（`probe` / `pay` / `complete` / `ack`），校验订单号、金额、收款方和幂等键。只有验付成功且履约回执确认后，才能交付 `lawyerbuddy-paid.zip`；同一订单重试必须返回同一履约结果，不得重复扣款。

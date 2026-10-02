@@ -33,6 +33,7 @@ function include(relative) {
     || value.startsWith("runtime/routing/")
     || value.startsWith("runtime/references/")
     || value.startsWith("runtime/contracts/")
+    || value.startsWith("runtime/payment/")
     || value.startsWith("runtime/capabilities/legal-skills-chinese/skills/")
     || value === "runtime/capabilities/legal-skills-chinese/NOTICE.md"
     || value === "runtime/capabilities/legal-skills-chinese/SOURCE.json";

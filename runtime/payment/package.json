@@ -1,0 +1,7 @@
+{
+  "name": "lawyerbuddy-alipay-payment-runtime",
+  "private": true,
+  "dependencies": {
+    "alipay-sdk": "^4.14.0"
+  }
+}
