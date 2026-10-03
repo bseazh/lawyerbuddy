@@ -20,8 +20,7 @@ ALIPAY_ENV=production
 PAYMENT_MODE=alipay_production
 ALIPAY_GATEWAY=https://openapi.alipay.com/gateway.do
 ALIPAY_SERVICE_ID=<正式 serviceId>
-LICENSE_SIGNING_SECRET_FILE=/etc/lawyerbuddy/secrets/license-signing-secret
 LAWYERBUDDY_VERSION=1.9.0
 ```
 
-支付宝私钥、授权签名密钥、订单和授权记录不得进入 GitHub 或公共 Skill 包。
+未设置 `LICENSE_SIGNING_SECRET_FILE` 时，服务首次启动自动生成 `data/license-signing-secret`。支付宝私钥、授权签名密钥、订单和授权记录不得进入 GitHub 或公共 Skill 包。

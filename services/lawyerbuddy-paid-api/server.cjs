@@ -24,6 +24,21 @@ function readSecretFile(file) {
   return secret;
 }
 
+function loadLicenseSigningSecret() {
+  const configured = String(process.env.LICENSE_SIGNING_SECRET_FILE || '').trim();
+  const location = path.resolve(configured || path.join(DATA_DIR, 'license-signing-secret'));
+  if (!fs.existsSync(location)) {
+    fs.mkdirSync(path.dirname(location), { recursive: true, mode: 0o700 });
+    try {
+      fs.writeFileSync(location, crypto.randomBytes(32).toString('hex'), { mode: 0o600, flag: 'wx' });
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+  }
+  try { fs.chmodSync(location, 0o600); } catch {}
+  return { secret: readSecretFile(location), file: location };
+}
+
 function readKeyMaterial(file, kind) {
   const raw = fs.readFileSync(path.resolve(file), 'utf8').trim();
   if (!raw) throw new Error(`密钥文件为空：${file}`);
@@ -76,8 +91,7 @@ function loadConfig() {
   const mode = String(process.env.PAYMENT_MODE || (environment === 'production' ? 'alipay_production' : 'alipay_sandbox')).trim();
   const expectedMode = environment === 'production' ? 'alipay_production' : 'alipay_sandbox';
   if (mode !== expectedMode) throw new Error(`当前环境要求 PAYMENT_MODE=${expectedMode}`);
-  const licenseSecretFile = required('LICENSE_SIGNING_SECRET_FILE');
-  const licenseSigningSecret = readSecretFile(licenseSecretFile);
+  const licenseSigning = loadLicenseSigningSecret();
   const lawyerbuddyVersion = String(process.env.LAWYERBUDDY_VERSION || '1.9.0').trim();
   if (process.env.ALIPAY_CONFIG_SOURCE === 'sandbox_file') {
     if (environment !== 'sandbox') throw new Error('官方临时沙箱配置不能用于 production');
@@ -89,7 +103,8 @@ function loadConfig() {
       amount: '0.01',
       serviceId: SANDBOX_SERVICE_ID,
       gateway: process.env.ALIPAY_GATEWAY || 'https://openapi-sandbox.dl.alipaydev.com/gateway.do',
-      licenseSigningSecret,
+      licenseSigningSecret: licenseSigning.secret,
+      licenseSigningSecretFile: licenseSigning.file,
       lawyerbuddyVersion
     };
   }
@@ -115,7 +130,8 @@ function loadConfig() {
     privateKey: readKeyMaterial(privateKeyFile, 'private'),
     publicKey: readKeyMaterial(publicKeyFile, 'public'),
     signingKey: rawPkcs1PrivateKey(privateKeyFile),
-    licenseSigningSecret,
+    licenseSigningSecret: licenseSigning.secret,
+    licenseSigningSecretFile: licenseSigning.file,
     lawyerbuddyVersion
   };
 }

@@ -40,18 +40,7 @@ for file in server.cjs package.json package-lock.json preflight.cjs; do
 done
 
 sudo -n test -r "$env_file" || {
-  echo "无法读取 $env_file；请先配置服务环境文件" >&2
-  exit 1
-}
-sudo -n grep -Eq '^[[:space:]]*(export[[:space:]]+)?LICENSE_SIGNING_SECRET_FILE=' "$env_file" || {
-  echo "生产环境缺少 LICENSE_SIGNING_SECRET_FILE" >&2
-  exit 1
-}
-
-license_secret_file="$(sudo -n awk '/^[[:space:]]*(export[[:space:]]+)?LICENSE_SIGNING_SECRET_FILE=/{sub(/^[^=]*=/, ""); gsub(/^[[:space:]\"]+|[[:space:]\"]+$/, ""); print; exit}' "$env_file")"
-test -n "$license_secret_file" || { echo "LICENSE_SIGNING_SECRET_FILE 为空" >&2; exit 1; }
-sudo -n test -s "$license_secret_file" || {
-  echo "授权签名密钥不存在或为空：$license_secret_file" >&2
+  echo "无法读取 $env_file；请先保留现有支付宝服务环境配置" >&2
   exit 1
 }
 

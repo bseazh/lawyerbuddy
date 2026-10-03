@@ -21,7 +21,7 @@ export LB_SSH_KEY=/绝对路径/lawyerbuddy_paid_deploy_ed25519
 ./services/lawyerbuddy-paid-api/deploy-production.sh
 ```
 
-部署前，服务器 `/etc/lawyerbuddy/lawyerbuddy-api.env` 必须配置 `LICENSE_SIGNING_SECRET_FILE`，且指向至少 32 个字符、权限受限的密钥文件。脚本会重启服务并验证：
+部署前保留服务器现有支付宝环境配置。未设置 `LICENSE_SIGNING_SECRET_FILE` 时，服务首次启动会自动生成权限为 `0600` 的持久化密钥。脚本会重启服务并验证：
 
 - `/health` 返回成功；
 - `/v1/skill/download` 返回 `410`；

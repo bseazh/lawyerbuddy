@@ -3,7 +3,7 @@ const path = require('node:path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const source = String(process.env.ALIPAY_CONFIG_SOURCE || 'files').trim();
-const required = ['ALIPAY_ENV', 'LICENSE_SIGNING_SECRET_FILE'];
+const required = ['ALIPAY_ENV'];
 if (source !== 'sandbox_file') {
   required.push('ALIPAY_APP_ID', 'ALIPAY_APP_PRIVATE_KEY_FILE', 'ALIPAY_PUBLIC_KEY_FILE', 'ALIPAY_SELLER_ID');
 }
@@ -46,7 +46,7 @@ if (source === 'sandbox_file') {
     process.exit(1);
   }
 } else {
-  for (const name of ['ALIPAY_APP_PRIVATE_KEY_FILE', 'ALIPAY_PUBLIC_KEY_FILE', 'LICENSE_SIGNING_SECRET_FILE']) {
+  for (const name of ['ALIPAY_APP_PRIVATE_KEY_FILE', 'ALIPAY_PUBLIC_KEY_FILE']) {
     const file = path.resolve(process.env[name]);
     if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
       console.error(`${name} 文件不存在或不是普通文件`);
@@ -54,14 +54,17 @@ if (source === 'sandbox_file') {
     }
   }
 }
-const licenseSecretFile = path.resolve(process.env.LICENSE_SIGNING_SECRET_FILE);
-if (!fs.existsSync(licenseSecretFile) || !fs.statSync(licenseSecretFile).isFile()) {
-  console.error('LICENSE_SIGNING_SECRET_FILE 文件不存在或不是普通文件');
-  process.exit(1);
-}
-if (fs.readFileSync(licenseSecretFile, 'utf8').trim().length < 32) {
-  console.error('LICENSE_SIGNING_SECRET_FILE 至少需要 32 个字符');
-  process.exit(1);
+const licenseSecretFile = String(process.env.LICENSE_SIGNING_SECRET_FILE || '').trim();
+if (licenseSecretFile) {
+  const resolvedSecret = path.resolve(licenseSecretFile);
+  if (!fs.existsSync(resolvedSecret) || !fs.statSync(resolvedSecret).isFile()) {
+    console.error('LICENSE_SIGNING_SECRET_FILE 文件不存在或不是普通文件');
+    process.exit(1);
+  }
+  if (fs.readFileSync(resolvedSecret, 'utf8').trim().length < 32) {
+    console.error('LICENSE_SIGNING_SECRET_FILE 至少需要 32 个字符');
+    process.exit(1);
+  }
 }
 console.log(JSON.stringify({
   ready: true,
@@ -72,7 +75,7 @@ console.log(JSON.stringify({
   unitPriceCny: process.env.ALIPAY_UNIT_PRICE_CNY || '0.01',
   configSource: source,
   activationEndpoint: '/v1/license/activate',
-  licenseSigningSecretPath: licenseSecretFile,
+  licenseSigningSecretPath: licenseSecretFile ? path.resolve(licenseSecretFile) : 'data/license-signing-secret（首次启动自动生成）',
   privateKeyPath: source === 'sandbox_file' ? 'official sandbox config' : path.resolve(process.env.ALIPAY_APP_PRIVATE_KEY_FILE),
   publicKeyPath: source === 'sandbox_file' ? 'official sandbox config' : path.resolve(process.env.ALIPAY_PUBLIC_KEY_FILE),
   sellerIdSource: source === 'sandbox_file' ? 'official sandbox config' : 'environment'

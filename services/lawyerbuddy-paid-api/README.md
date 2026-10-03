@@ -28,21 +28,20 @@
 
 ## 配置
 
-复制 `.env.example` 为 `.env`，填写支付宝环境变量和：
+复制 `.env.example` 为 `.env`，填写支付宝环境变量和版本号：
 
 ```text
-LICENSE_SIGNING_SECRET_FILE=/etc/lawyerbuddy/secrets/license-signing-secret
 LAWYERBUDDY_VERSION=1.9.0
 ```
 
-签名密钥可在服务器上生成：
+如果未设置 `LICENSE_SIGNING_SECRET_FILE`，服务首次启动会自动生成 `data/license-signing-secret`，权限为 `0600`，后续部署继续使用同一文件。请随服务器数据一并备份。也可以显式指定独立密钥文件：
 
 ```bash
 umask 077
 openssl rand -hex 32 > /etc/lawyerbuddy/secrets/license-signing-secret
 ```
 
-该密钥不得放入 GitHub、Skill ZIP、日志或客户端，也不能复用支付宝应用私钥。
+然后设置 `LICENSE_SIGNING_SECRET_FILE` 指向该文件。授权签名密钥不得放入 GitHub、Skill ZIP、日志或客户端，也不能复用支付宝应用私钥。
 
 ## 本地检查
 
@@ -66,7 +65,7 @@ curl -i -X POST http://127.0.0.1:3000/v1/license/activate \
 
 ## 生产部署
 
-确保服务器环境文件已配置 `LICENSE_SIGNING_SECRET_FILE` 后运行：
+确认服务器保留现有支付宝环境配置后运行：
 
 ```bash
 export LB_DEPLOY_HOST=ubuntu@snorlaxden.fun

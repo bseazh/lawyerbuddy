@@ -10,7 +10,8 @@ ALIPAY_SELLER_ID=
 ALIPAY_SERVICE_ID=
 ALIPAY_GATEWAY=https://openapi.alipay.com/gateway.do
 ALIPAY_UNIT_PRICE_CNY=0.01
-LICENSE_SIGNING_SECRET_FILE=/etc/lawyerbuddy/secrets/license-signing-secret
+# 可选；未设置时首次启动自动生成 data/license-signing-secret
+# LICENSE_SIGNING_SECRET_FILE=/etc/lawyerbuddy/secrets/license-signing-secret
 LAWYERBUDDY_VERSION=1.9.0
 PAYMENT_PROOF_HEADER=Payment-Proof
 ```
