@@ -35,7 +35,7 @@ async function main() {
       ALIPAY_SERVICE_ID: 'api_mock_service_id',
       LICENSE_SIGNING_SECRET_FILE: secretFile,
       LAWYERBUDDY_DATA_DIR: path.join(temporary, 'data'),
-      LAWYERBUDDY_VERSION: '1.9.0'
+      LAWYERBUDDY_VERSION: '1.9.1'
     });
 
     const payment = { outTradeNo: '', resourceId: '' };
@@ -58,7 +58,7 @@ async function main() {
       server.once('error', reject);
     });
     const base = `http://127.0.0.1:${server.address().port}`;
-    const body = { client_id: 'local-test', skill_version: '1.9.0', features: ['sorting', 'timeline'] };
+    const body = { client_id: 'local-test', skill_version: '1.9.1', features: ['sorting', 'timeline'] };
 
     const health = await request(base, '/health');
     assert.equal(health.status, 200);
@@ -78,7 +78,7 @@ async function main() {
       headers: { 'Content-Type': 'application/json', 'X-Out-Trade-No': first.body.out_trade_no },
       body: JSON.stringify({ ...body, features: ['timeline', 'sorting'] })
     });
-    assert.equal(retry.status, 402);
+    assert.equal(retry.status, 402, JSON.stringify(retry.body));
     assert.equal(retry.body.out_trade_no, first.body.out_trade_no);
 
     const mismatch = await request(base, '/v1/license/activate', {
@@ -87,6 +87,21 @@ async function main() {
       body: JSON.stringify({ ...body, client_id: 'another-client' })
     });
     assert.equal(mismatch.status, 409);
+
+    const invalidOrder = await request(base, '/v1/license/activate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Out-Trade-No': '__proto__' },
+      body: JSON.stringify(body)
+    });
+    assert.equal(invalidOrder.status, 400);
+
+    const lowercaseOrder = await request(base, '/v1/license/activate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Out-Trade-No': 'LBORDER_1234567890_abcdef1234567890' },
+      body: JSON.stringify({ ...body, client_id: 'lowercase-order-test' })
+    });
+    assert.equal(lowercaseOrder.status, 402, JSON.stringify(lowercaseOrder.body));
+    assert.equal(lowercaseOrder.body.out_trade_no, 'LBORDER_1234567890_abcdef1234567890');
 
     const proof = b64url(JSON.stringify({
       protocol: { payment_proof: 'mock-proof', trade_no: 'ALIPAY_TEST_TRADE' }, method: {}

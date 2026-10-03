@@ -22,7 +22,7 @@ docs/使用指南.md                  面向律师的操作示例
 
 ```text
 请安装并检查 LawyerBuddy：
-npx --yes github:bseazh/lawyerbuddy#v1.9.0 install
+npx --yes github:bseazh/lawyerbuddy#v1.9.1 install
 node .agents/skills/lawyerbuddy/scripts/doctor.js doctor
 ```
 
@@ -89,11 +89,14 @@ B. 自定义一级、二级目录
 ```bash
 npm run pack:workbuddy
 npm run pack:skillhub
+npm run pack:skillhub:paid
 ```
 
-两个命令都会生成 `dist/` 下的本地公共包文件夹和 ZIP。上传时选择生成文件夹中第一层直接包含 `SKILL.md` 的那一层，或直接上传对应 ZIP；不要选择外层 Git 仓库目录。
+前两个命令生成免费本地公共包；`pack:skillhub:paid` 生成支付宝永久激活版 Pay Skill。发布普通 Skill 时上传 `lawyerbuddy-skillhub-public-v版本.zip`；选择“发布付费 Skill”时必须上传 `lawyerbuddy-skillhub-paid-v版本.zip`。不要混用两个包。
 
 SkillHub 包只包含本地法律工作所需的总路由、产品 Skill、共享规则和内置能力，不包含测试文件、本地缓存、Python 字节码、密钥或服务器配置。打包器会检查根 `SKILL.md` 的 YAML `name` 与 `description`，并确保 ZIP 第一项是根入口。
+
+付费包首次使用时交付永久授权，单价 `0.01 元`；激活后不重复收费。支付实现、隐私边界和发布检查以 `packaging/skillhub-paid/` 中的专用入口为准。
 
 ## 版本更新
 

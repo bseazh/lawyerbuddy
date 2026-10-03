@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 : "${LB_DEPLOY_HOST:?请设置 LB_DEPLOY_HOST，例如 ubuntu@snorlaxden.fun}"
 : "${LB_SERVER_DIR:?请设置 LB_SERVER_DIR，例如 /home/ubuntu/Project/lawyerbuddy-api}"
-: "${LB_RELEASE_VERSION:?请设置 LB_RELEASE_VERSION，例如 1.9.0}"
+: "${LB_RELEASE_VERSION:?请设置 LB_RELEASE_VERSION，例如 1.9.1}"
 
 repo_dir="$(cd "$(dirname "$0")" && pwd)"
 [[ "$LB_RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {

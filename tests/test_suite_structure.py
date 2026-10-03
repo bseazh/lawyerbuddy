@@ -91,6 +91,35 @@ class SuiteStructureTest(unittest.TestCase):
         self.assertTrue(chinese_entries)
         self.assertTrue(all(info.flag_bits & 0x0800 for info in chinese_entries))
 
+    def test_paid_skillhub_package_contains_executable_payment_flow(self) -> None:
+        import subprocess
+        import zipfile
+
+        result = subprocess.run(
+            ["node", str(ROOT / "bin" / "build-skillhub-paid-package.js")],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        report = json.loads(result.stdout)
+        self.assertEqual(report["package_type"], "skillhub-paid-activation")
+        self.assertEqual(report["price"], "0.01 CNY")
+        self.assertLessEqual(report["files"], 200)
+        with zipfile.ZipFile(report["zip"]) as archive:
+            entries = archive.namelist()
+            self.assertEqual(entries[0], "SKILL.md")
+            self.assertIn("scripts/lawyerbuddy-paid.mjs", entries)
+            self.assertIn("package.json", entries)
+            skill = archive.read("SKILL.md").decode("utf-8")
+            package = json.loads(archive.read("package.json"))
+        for signal in (
+            "402账单下发", "Payment-Needed", "Payment-Proof", "probe", "pay", "complete", "ack",
+            "alipay.aipay.agent.payment.verify", "alipay.aipay.agent.fulfillment.confirm", "订单持久化与幂等",
+        ):
+            self.assertIn(signal, skill)
+        self.assertEqual(package["peerDependencies"]["@alipay/agent-payment"], "1.0.23")
+
     def test_user_guide_covers_document_drafting_and_is_linked(self) -> None:
         guide = (ROOT / "docs" / "使用指南.md").read_text(encoding="utf-8")
         readme = (ROOT / "README.md").read_text(encoding="utf-8")

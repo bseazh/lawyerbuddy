@@ -92,7 +92,7 @@ function loadConfig() {
   const expectedMode = environment === 'production' ? 'alipay_production' : 'alipay_sandbox';
   if (mode !== expectedMode) throw new Error(`当前环境要求 PAYMENT_MODE=${expectedMode}`);
   const licenseSigning = loadLicenseSigningSecret();
-  const lawyerbuddyVersion = String(process.env.LAWYERBUDDY_VERSION || '1.9.0').trim();
+  const lawyerbuddyVersion = String(process.env.LAWYERBUDDY_VERSION || '1.9.1').trim();
   if (process.env.ALIPAY_CONFIG_SOURCE === 'sandbox_file') {
     if (environment !== 'sandbox') throw new Error('官方临时沙箱配置不能用于 production');
     const official = readOfficialSandboxConfig();
@@ -254,6 +254,12 @@ function activationRequest(req, config) {
   if (!/^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$/.test(skillVersion)) return { error: 'skill_version 格式不正确' };
   if (features.length > 32 || features.some((feature) => feature.length > 80)) return { error: 'features 数量或长度超出限制' };
   return { value: { clientId, skillVersion, features } };
+}
+
+function requestedOutTradeNo(req) {
+  const value = String(req.header('X-Out-Trade-No') || req.body?.out_trade_no || '').trim();
+  if (value && !/^[A-Za-z0-9][A-Za-z0-9_-]{15,79}$/.test(value)) return { error: 'out_trade_no 格式不正确' };
+  return { value };
 }
 
 function licenseToken(config, license) {
@@ -453,15 +459,17 @@ function createApp(options = {}) {
       if (activation.error) return res.status(400).json({ code: 'INVALID_REQUEST', message: activation.error });
       const requestValue = activation.value;
       const requestHash = hashRequest(requestValue);
+      const requestedOrder = requestedOutTradeNo(req);
+      if (requestedOrder.error) return res.status(400).json({ code: 'INVALID_ORDER_NO', message: requestedOrder.error });
       const proof = String(req.header('Payment-Proof') || '').trim();
       if (!proof) {
-        const requestedOutTradeNo = String(req.header('X-Out-Trade-No') || req.body?.out_trade_no || '').trim();
-        let order = requestedOutTradeNo ? orderRepository.findByOutTradeNo(requestedOutTradeNo) : null;
+        const requestedOrderNo = requestedOrder.value;
+        let order = requestedOrderNo ? orderRepository.findByOutTradeNo(requestedOrderNo) : null;
         if (order && order.requestHash !== requestHash) {
           return res.status(409).json({ code: 'ORDER_REQUEST_MISMATCH', message: '订单已绑定其他授权请求' });
         }
         if (!order) {
-          const outTradeNo = requestedOutTradeNo || `ORDER_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+          const outTradeNo = requestedOrderNo || `ORDER_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
           order = orderRepository.createPending({
             outTradeNo,
             amount: config.amount,
@@ -488,8 +496,7 @@ function createApp(options = {}) {
         });
       }
 
-      const requestedOutTradeNo = String(req.header('X-Out-Trade-No') || req.body?.out_trade_no || '').trim();
-      const verified = await verifyProof(config, sdk, proof, requestedOutTradeNo);
+      const verified = await verifyProof(config, sdk, proof, requestedOrder.value);
       const order = verified?.outTradeNo ? orderRepository.findByOutTradeNo(verified.outTradeNo) : null;
       if (!order || !verified || !verified.active || verified.outTradeNo !== order.outTradeNo
         || order.requestHash !== requestHash

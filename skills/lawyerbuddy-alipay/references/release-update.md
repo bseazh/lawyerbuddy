@@ -16,7 +16,7 @@
 ```bash
 export LB_DEPLOY_HOST=ubuntu@snorlaxden.fun
 export LB_SERVER_DIR=/home/ubuntu/Project/lawyerbuddy-api
-export LB_RELEASE_VERSION=1.9.0
+export LB_RELEASE_VERSION=1.9.1
 export LB_SSH_KEY=/绝对路径/lawyerbuddy_paid_deploy_ed25519
 ./services/lawyerbuddy-paid-api/deploy-production.sh
 ```
