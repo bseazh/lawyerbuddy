@@ -81,7 +81,16 @@ if ! sudo -n systemctl restart lawyerbuddy-api; then
   exit 1
 fi
 
-if ! curl --fail --silent --show-error https://snorlaxden.fun/health >/dev/null; then
+health_ready=0
+for attempt in {1..20}; do
+  if curl --fail --silent --show-error https://snorlaxden.fun/health >/dev/null 2>&1; then
+    health_ready=1
+    break
+  fi
+  sleep 0.5
+done
+if [[ "$health_ready" != "1" ]]; then
+  echo "健康检查在 10 秒内未恢复" >&2
   rollback
   exit 1
 fi
