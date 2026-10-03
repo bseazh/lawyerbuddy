@@ -45,11 +45,14 @@ class SuiteStructureTest(unittest.TestCase):
         self.assertTrue((folder / "runtime" / "routing" / "capability-index.json").is_file())
         self.assertFalse((folder / "examples").exists())
         self.assertFalse((folder / "tests").exists())
+        self.assertFalse((folder / "skills" / "lawyerbuddy-alipay").exists())
+        self.assertFalse((folder / "runtime" / "payment").exists())
         self.assertTrue(archive_path.is_file())
         with zipfile.ZipFile(archive_path) as archive:
             entries = archive.namelist()
             self.assertIn("SKILL.md", entries)
             self.assertFalse(any(entry.startswith(("examples/", "tests/")) for entry in entries))
+            self.assertFalse(any(entry.startswith(("skills/lawyerbuddy-alipay/", "runtime/payment/", "services/")) for entry in entries))
             chinese_entry = "skills/lawyerbuddy-sorting/assets/民事案件案由参考表_2025.json"
             self.assertIn(chinese_entry, entries)
             info = archive.getinfo(chinese_entry)
@@ -84,6 +87,7 @@ class SuiteStructureTest(unittest.TestCase):
             entries,
         )
         self.assertFalse(any(entry.lower().endswith((".docx", ".yaml", ".yml")) for entry in entries))
+        self.assertFalse(any(entry.startswith(("skills/lawyerbuddy-alipay/", "runtime/payment/", "services/")) for entry in entries))
         self.assertTrue(chinese_entries)
         self.assertTrue(all(info.flag_bits & 0x0800 for info in chinese_entries))
 
@@ -101,7 +105,7 @@ class SuiteStructureTest(unittest.TestCase):
         )
 
     def test_all_manifest_skills_have_matching_frontmatter(self) -> None:
-        self.assertEqual(len(self.manifest["skills"]), 10)
+        self.assertEqual(len(self.manifest["skills"]), 9)
         for skill in self.manifest["skills"]:
             skill_file = ROOT / "skills" / skill["name"] / "SKILL.md"
             self.assertTrue(skill_file.is_file(), skill["name"])
@@ -119,7 +123,7 @@ class SuiteStructureTest(unittest.TestCase):
         self.assertEqual(statuses["lawyerbuddy-complaint-draft"], "ready")
         self.assertEqual(statuses["lawyerbuddy-contract-draft"], "ready")
         self.assertEqual(statuses["lawyerbuddy-contract-review"], "ready")
-        self.assertEqual(statuses["lawyerbuddy-alipay"], "sandbox")
+        self.assertNotIn("lawyerbuddy-alipay", statuses)
 
     def test_drafting_products_have_distinct_routes_without_internal_id_collision(self) -> None:
         root_router = (ROOT / "SKILL.md").read_text(encoding="utf-8")

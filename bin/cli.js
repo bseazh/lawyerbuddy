@@ -85,6 +85,7 @@ function install() {
       });
     });
     fs.cpSync(runtimeSource, stagedRuntime, { recursive: true, errorOnExist: true });
+    fs.rmSync(path.join(stagedRuntime, "payment"), { recursive: true, force: true });
     fs.copyFileSync(manifestSource, path.join(stagedRuntime, "skills.json"));
     const routerScripts = path.join(stagedSkills, "lawyerbuddy", "scripts");
     fs.mkdirSync(routerScripts, { recursive: true });

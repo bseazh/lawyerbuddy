@@ -1,47 +1,79 @@
-# LawyerBuddy 支付宝 AI 按量付费下载接口
+# LawyerBuddy 授权激活服务
 
-这是一个独立的 Node.js/Express 支付服务模板，支持沙箱联调和正式付费下载。目标接口为：
+这是与公共本地 Skill 分离部署的 Node.js/Express 服务。它保留支付宝 AI 付费链路，但付款成功后只签发授权令牌，不下载或返回 LawyerBuddy 代码。
 
-```text
-GET /v1/skill/download
+## 接口
+
+### `POST /v1/license/activate`
+
+请求体：
+
+```json
+{
+  "client_id": "设备或用户标识",
+  "skill_version": "1.9.0",
+  "features": ["sorting", "summarizing", "timeline"]
+}
 ```
 
-它实现支付宝 AI 按量付费的 402、`Payment-Needed`、`Payment-Proof`、`alipay.aipay.agent.payment.verify`、履约确认和 ZIP 资源下载流程。单价默认为 `0.01` 元。
+首次请求没有 `Payment-Proof`，返回 `HTTP 402`、`Payment-Needed` 和 `out_trade_no`。付款后使用相同请求体和订单号重试，并携带官方产生的 `Payment-Proof`。验付和履约成功后返回 `license_id`、签名 `license_token`、版本、功能、激活时间和 `Payment-Validation`。
 
-## 安全配置
+### `POST /v1/license/status`
 
-复制 `.env.example` 为 `.env`，只填写本机密钥文件路径。不要把 `.env`、私钥、公钥或 `.alipay-sandbox.json` 上传到 Workbuddy 或提交 GitHub。
+通过请求体 `license_token` 或 `Authorization: Bearer <token>` 验证授权。只有签名有效且授权记录仍存在时返回 `active: true`。
 
-应用私钥和支付宝公钥可继续放在支付宝开放平台密钥工具生成的目录中；服务端只在运行时读取，不会把密钥内容写入源码。
+### `GET /v1/skill/download`
 
-`ALIPAY_SELLER_ID` 必须填写与当前 AppID 绑定的支付宝沙箱商家 PID（通常为 `2088` 开头），不能用 AppID 代替。可登录[支付宝开放平台](https://open.alipay.com/)，进入当前沙箱应用的“应用信息/商家信息”，复制商户 PID 或商家 UID，写入 `.env`。
+固定返回 `410 DOWNLOAD_DISABLED`。服务端不再交付 ZIP 或任何代码。
 
-沙箱可使用 `ALIPAY_CONFIG_SOURCE=sandbox_file`，生产必须使用正式 AppID、商家 PID、`serviceId`、支付宝公钥和服务器私钥。生产模式通过 `RESOURCE_FILE` 指定付款成功后下载的 ZIP 文件。生产私钥和 `.env` 不能上传到仓库。
+## 配置
 
-## 本地运行
+复制 `.env.example` 为 `.env`，填写支付宝环境变量和：
+
+```text
+LICENSE_SIGNING_SECRET_FILE=/etc/lawyerbuddy/secrets/license-signing-secret
+LAWYERBUDDY_VERSION=1.9.0
+```
+
+签名密钥可在服务器上生成：
 
 ```bash
-npm install
-cp .env.example .env
+umask 077
+openssl rand -hex 32 > /etc/lawyerbuddy/secrets/license-signing-secret
+```
+
+该密钥不得放入 GitHub、Skill ZIP、日志或客户端，也不能复用支付宝应用私钥。
+
+## 本地检查
+
+```bash
+npm ci
 npm run preflight
 npm start
 ```
 
-如果只需要复现官方临时沙箱的已通过测试：
+未付款预检：
 
 ```bash
-ALIPAY_CONFIG_SOURCE=sandbox_file npm start
+curl -i -X POST http://127.0.0.1:3000/v1/license/activate \
+  -H 'Content-Type: application/json' \
+  -d '{"client_id":"local-test","skill_version":"1.9.0","features":["sorting"]}'
 ```
 
-服务启动后，先访问 `http://127.0.0.1:3000/demo/a2m/resource`，应返回 HTTP 402 和 `Payment-Needed`。
+预期返回 `HTTP 402` 和 `Payment-Needed`。旧下载接口应返回 `410`。真实付款、验付和履约只能通过支付宝官方买家流程完成；未实际付款时不能称为正式支付测试通过。
 
-## 官方沙箱联调
+订单存放于 `data/orders.json`，授权存放于 `data/licenses.json`，文件权限为 `0600`。同一 `out_trade_no` 绑定同一激活请求并返回同一授权结果。
 
-先启动服务，再由已安装的支付宝官方 Skill 执行受控联调：
+## 生产部署
+
+确保服务器环境文件已配置 `LICENSE_SIGNING_SECRET_FILE` 后运行：
 
 ```bash
-node "/Users/Apple/.codex/skills/alipay-aipay/references/normal/scripts/runtime.mjs" a2m precheck --url "http://127.0.0.1:3000/demo/a2m/resource" --method GET --agent-platform "Codex" --session-id "<当前会话ID>"
-node "/Users/Apple/.codex/skills/alipay-aipay/references/normal/scripts/runtime.mjs" a2m run --url "http://127.0.0.1:3000/demo/a2m/resource" --method GET --buyer-id "<沙箱买家userId>" --auto-complete --require-payment-validation --agent-platform "Codex" --session-id "<当前会话ID>"
+export LB_DEPLOY_HOST=ubuntu@snorlaxden.fun
+export LB_SERVER_DIR=/home/ubuntu/Project/lawyerbuddy-api
+export LB_RELEASE_VERSION=1.9.0
+export LB_SSH_KEY=/绝对路径/lawyerbuddy_paid_deploy_ed25519
+./services/lawyerbuddy-paid-api/deploy-production.sh
 ```
 
-不要手写 Payment-Proof，也不要把支付凭证、私钥或临时支付链接写入报告。只有官方脚本取得 HTTP 200、非空资源、有效 `Payment-Validation` 和履约确认，才能称为真实沙箱联调通过。
+脚本只同步 API 源码，不上传 ZIP。它会重启服务并检查健康接口、旧下载接口 `410` 和激活接口未付款 `402`；失败时恢复旧服务文件。

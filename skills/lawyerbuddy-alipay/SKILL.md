@@ -1,53 +1,37 @@
 ---
 name: lawyerbuddy-alipay
-description: 为 LawyerBuddy 业务资源接入支付宝 AI 按量付费。支持沙箱联调和正式付费下载；用于 402 账单、Payment-Proof、资源交付、履约回执与订单幂等。
+description: 为独立的 LawyerBuddy 授权服务接入支付宝 AI 按量付费。用于授权激活的 402 账单、Payment-Proof 验付、授权令牌签发、履约回执与订单幂等；不用于下载或更新 Skill 代码。
 ---
 
-# LawyerBuddy 支付适配
+# LawyerBuddy 授权服务
 
-这是一个独立的支付适配入口，不改变案件整理、案件总结、时间轴和文书 Skill 的业务逻辑。需要执行支付宝官方接入步骤时，可另行安装并读取 `@alipay/alipay-aipay` 提供的官方 Skill。
+本 Skill 只供服务端开发和运维使用，不随免费本地版 SkillHub 或 WorkBuddy 包分发。案件材料整理、报告、时间轴和文书功能仍在用户本地运行。
 
-## 默认资源下载接口
-
-没有明确业务接口时，使用已部署的付费资源下载接口：
+## 业务接口
 
 ```text
-GET https://snorlaxden.fun/v1/skill/download
-单次价格：0.01 元
-成功响应：lawyerbuddy-paid.zip 文件下载
+POST /v1/license/activate
+POST /v1/license/status
+GET  /v1/skill/download  → 410 DOWNLOAD_DISABLED
 ```
 
-也可以将同一支付适配器绑定到其他业务接口。真实接入前必须确认收费资源、接口路径、请求体、成功响应和失败响应。
+激活请求包含 `client_id`、`skill_version` 和所需 `features`。未付款时返回 `HTTP 402` 与 `Payment-Needed`；付款后由服务端验证 `Payment-Proof`、确认履约并返回签名授权令牌。接口只返回授权状态，不返回 ZIP、Skill 文件或其他代码。
 
-## 流程
+## 强制流程
 
-1. 读取 `references/payment-flow.md` 和 `references/sandbox-testing.md`。
-2. 检查项目 `.env` 或部署环境中的沙箱/生产配置；缺少配置时列出缺项，不猜测 App ID、密钥或回调地址。
-3. 未提供有效 Payment-Proof 时返回 `402 Payment Required`，不得提前执行收费业务。
-4. 服务端校验凭证、订单号、金额、业务参数和幂等键；客户端不能覆盖服务端价格。
-5. 验证通过后交付资源并写入履约回执；生成失败不能标记为已履约。
-6. 同一订单重试返回同一结果，不重复扣费或重复生成资源。
-7. 本地和沙箱测试禁止真实付款。生产私钥只能由环境变量或密钥服务提供；不得提交 GitHub 或打包进 Skill。
+1. 服务端固定价格，客户端不能覆盖。
+2. 首次激活创建持久化订单，并将请求摘要与订单绑定。
+3. 携带 `Payment-Proof` 重试时必须复用原订单和原请求。
+4. 服务端调用支付宝验付，核对订单、金额和授权资源。
+5. 验付成功后生成授权记录，再调用履约确认。
+6. 同一订单重试返回同一授权令牌，不重复扣费或重复签发。
+7. `POST /v1/license/status` 校验签名及持久化授权记录，不接受客户端自报 `active=true`。
 
-## 版本更新
+## 安全边界
 
-每次修改付费 Skill 或下载 API，必须递增版本号，并同时更新付费 ZIP、GitHub 和生产服务器；不能只推送 GitHub。发布前后按 `references/release-update.md` 执行，使用 `services/lawyerbuddy-paid-api/deploy-production.sh` 同步服务器。密钥、`.env` 和订单数据始终只留在服务器安全目录。
+- 支付宝私钥、公钥、`.env`、订单、授权记录和授权签名密钥只保留在服务器。
+- `LICENSE_SIGNING_SECRET_FILE` 必须指向至少 32 个字符的独立服务器密钥，不得复用支付宝私钥。
+- 公共 Skill 包不应出现本服务域名、付款指令或远程下载逻辑。
+- 授权只控制许可状态，不能阻止用户复制已经下载到本地的代码。
 
-## 配置
-
-复制 `references/environment.example.md` 的变量到项目 `.env`。`.env` 不得提交 GitHub：
-
-```text
-ALIPAY_ENV=production
-PAYMENT_MODE=alipay_production
-ALIPAY_APP_ID=
-ALIPAY_APP_PRIVATE_KEY_FILE=/secure/path/app_private_key.pem
-ALIPAY_PUBLIC_KEY_FILE=/secure/path/alipay_public_key.pem
-ALIPAY_SELLER_ID=
-ALIPAY_SERVICE_ID=
-ALIPAY_GATEWAY=https://openapi.alipay.com/gateway.do
-ALIPAY_UNIT_PRICE_CNY=0.01
-RESOURCE_FILE=/secure/path/lawyerbuddy-paid.zip
-```
-
-没有真实业务接口和生产配置时，只能完成流程设计或沙箱验收，不能声称已完成真实扣款。当前正式下载接口由服务端保护，付款成功后返回 ZIP；Skill 本身不保存生产私钥。
+详细接口、配置、测试与发布步骤见本目录 `references/` 以及 `services/lawyerbuddy-paid-api/README.md`。

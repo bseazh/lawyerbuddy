@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, "..");
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 const version = pkg.version;
 const dist = path.join(root, "dist");
-const bundle = path.join(dist, `lawyerbuddy-skillhub-v${version}`);
+const bundle = path.join(dist, `lawyerbuddy-skillhub-public-v${version}`);
 const archive = `${bundle}.zip`;
 const maxFiles = 200;
 const supportedExtensions = new Set([
@@ -25,6 +25,12 @@ function run(command, args, options = {}) {
 
 function include(relative) {
   const value = relative.split(path.sep).join("/");
+  if (value === "skills/lawyerbuddy-alipay/SKILL.md"
+      || value.startsWith("skills/lawyerbuddy-alipay/")
+      || value.startsWith("runtime/payment/")
+      || value.startsWith("services/")
+      || value.startsWith("examples/")
+      || value.startsWith("tests/")) return false;
   return value === "SKILL.md"
     || value === "README.md"
     || value === "INSTALL.md"
@@ -33,7 +39,6 @@ function include(relative) {
     || value.startsWith("runtime/routing/")
     || value.startsWith("runtime/references/")
     || value.startsWith("runtime/contracts/")
-    || value.startsWith("runtime/payment/")
     || value.startsWith("runtime/capabilities/legal-skills-chinese/skills/")
     || value === "runtime/capabilities/legal-skills-chinese/NOTICE.md"
     || value === "runtime/capabilities/legal-skills-chinese/SOURCE.json";
@@ -122,6 +127,26 @@ try {
   }
 
   const files = collectFiles(bundle);
+
+  const suspicious = [
+    /snorlaxden/iu,
+    /payment-proof/iu,
+    /payment-needed/iu,
+    /lawyerbuddy-paid\.zip/iu,
+    /@alipay\/alipay-aipay/iu,
+    /alipay-sdk/iu,
+    /https?:\/\/[^\s)]+\/v1\/skill\/download/iu,
+  ];
+  const suspiciousFiles = [];
+  for (const file of files) {
+    const absolute = path.join(bundle, file);
+    const text = fs.readFileSync(absolute);
+    if (suspicious.some((pattern) => pattern.test(text.toString("utf8")))) suspiciousFiles.push(file);
+  }
+  if (suspiciousFiles.length) {
+    throw new Error(`公共 SkillHub 包包含服务器付费或外部下载内容：${suspiciousFiles.join("、")}`);
+  }
+
   if (files.length > maxFiles) throw new Error(`文件数超出 SkillHub 上限：${files.length}/${maxFiles}`);
   const licenseFiles = files.filter((file) => path.basename(file).toUpperCase() === "LICENSE");
   if (licenseFiles.length) throw new Error(`发现不允许上传的 LICENSE 文件：${licenseFiles.join("、")}`);
@@ -151,6 +176,7 @@ try {
     limit: maxFiles,
     unsupported_files: 0,
     root_skill: "SKILL.md",
+    package_type: "public-local",
     cause_catalog: "skills/lawyerbuddy-sorting/assets/民事案件案由参考表_2025.json",
   }, null, 2));
 } catch (error) {

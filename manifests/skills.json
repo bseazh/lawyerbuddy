@@ -10,7 +10,6 @@
     { "name": "lawyerbuddy-complaint-draft", "role": "product", "status": "ready", "capability_pipeline": "lawyerbuddy-complaint-draft" },
     { "name": "lawyerbuddy-document-drafting", "role": "product", "status": "ready", "capability_pipeline": "lawyerbuddy-document-drafting" },
     { "name": "lawyerbuddy-contract-draft", "role": "product", "status": "ready", "capability_pipeline": "lawyerbuddy-contract-draft" },
-    { "name": "lawyerbuddy-contract-review", "role": "product", "status": "ready", "capability_pipeline": "lawyerbuddy-contract-review" },
-    { "name": "lawyerbuddy-alipay", "role": "payment-router", "status": "sandbox" }
+    { "name": "lawyerbuddy-contract-review", "role": "product", "status": "ready", "capability_pipeline": "lawyerbuddy-contract-review" }
   ]
 }

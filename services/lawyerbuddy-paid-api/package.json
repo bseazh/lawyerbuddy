@@ -1,12 +1,13 @@
 {
-  "name": "lawyerbuddy-alipay-sandbox-demo",
-  "version": "0.1.0",
+  "name": "lawyerbuddy-license-api",
+  "version": "1.9.0",
   "private": true,
-  "description": "LawyerBuddy AI 按量付费支付宝沙箱联调接口",
+  "description": "LawyerBuddy 独立授权激活与支付宝 AI 付费服务",
   "type": "commonjs",
   "scripts": {
     "start": "node server.cjs",
-    "preflight": "node preflight.cjs"
+    "preflight": "node preflight.cjs",
+    "test": "node test-license-api.cjs"
   },
   "engines": {
     "node": ">=18"

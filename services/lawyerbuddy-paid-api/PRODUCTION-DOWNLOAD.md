@@ -1,38 +1,20 @@
-# 正式付费下载
+# 生产授权服务
 
-## 服务端接口
-
-```text
-GET https://snorlaxden.fun/v1/skill/download
-```
-
-未携带有效 `Payment-Proof` 时，服务端返回 `HTTP 402` 和 `Payment-Needed`。
-
-付款完成后，使用同一个请求重试。服务端会依次完成：
-
-1. 验证 `Payment-Proof`；
-2. 校验订单、金额、资源路径和商家身份；
-3. 调用履约确认；
-4. 返回 `lawyerbuddy-paid.zip` 下载文件；
-5. 返回 `Payment-Validation`，并对同一订单保持幂等。
-
-## 生产配置
-
-生产环境必须使用正式 `serviceId` 和正式支付宝网关：
+旧的付费 ZIP 下载模式已经停用。公共 LawyerBuddy Skill 通过 SkillHub、WorkBuddy 或 GitHub 正常安装；独立服务器只处理授权激活。
 
 ```text
-ALIPAY_ENV=production
-PAYMENT_MODE=alipay_production
-ALIPAY_GATEWAY=https://openapi.alipay.com/gateway.do
-ALIPAY_SERVICE_ID=<正式 serviceId>
-RESOURCE_FILE=<服务器上的 ZIP 绝对路径>
+POST https://snorlaxden.fun/v1/license/activate
+POST https://snorlaxden.fun/v1/license/status
+GET  https://snorlaxden.fun/v1/skill/download → 410
 ```
 
-生产应用私钥只放在服务器密钥目录或密钥管理服务，不进入仓库、Skill ZIP、日志或客户端。
+激活接口保留完整的支付宝 `402 → Payment-Proof → 验付 → 履约确认 → 授权令牌` 流程。相同订单与请求重试必须返回相同授权，不重复扣费或重复签发。
 
-## 验收边界
+生产配置除支付宝参数外，还必须设置：
 
-- `HTTP 402` 和 `Payment-Needed` 可公开预检；
-- 真实付款、验付和履约需要支付宝账户侧实际操作；
-- 未实际付款时，不得把 402 预检称为正式支付成功；
-- ZIP 内容更新后，必须重新生成并替换服务端 `RESOURCE_FILE`。
+```text
+LICENSE_SIGNING_SECRET_FILE=/etc/lawyerbuddy/secrets/license-signing-secret
+LAWYERBUDDY_VERSION=1.9.0
+```
+
+生产密钥、订单和授权记录只能保留在服务器。公共 Skill 包不包含本服务域名、远程付款说明、服务器配置或代码下载逻辑。
