@@ -11,6 +11,12 @@
 - 首次激活收费 `0.01 元`；有效授权后只进行免费状态检查，不重复下单。
 - 强化客户端订单号校验，并保持免费公共包与付费包严格分离。
 
+## 1.9.2
+
+- 将付费 Skill 迁移到标准 `skills/lawyerbuddy-paid/` 路径，支持 GitHub Skills CLI 直接发现和安装。
+- 删除历史 `runtime/payment` 与 `skills/lawyerbuddy-alipay` 适配层，避免旧支付逻辑与现行授权流程混用。
+- 免费包和 WorkBuddy 包显式排除付费入口，SkillHub 付费包从同一目录构建。
+
 ## 1.9.0
 
 - SkillHub 和 WorkBuddy 改为免费本地公共包，排除支付 Skill、支付运行层、服务器域名和远程代码下载。

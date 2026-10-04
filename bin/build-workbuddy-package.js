@@ -70,7 +70,7 @@ for (const relative of listedFiles) {
 
 // WorkBuddy 上传包只提供本地法律工作能力。支付宝适配和服务器运行层
 // 保留在源码仓库，但不能随本地 Skill 包进入 Agent 工作区。
-for (const relative of ["skills/lawyerbuddy-alipay", "runtime/payment", "services"]) {
+for (const relative of ["skills/lawyerbuddy-paid", "services"]) {
   fs.rmSync(path.join(folder, relative), { recursive: true, force: true });
 }
 
@@ -136,7 +136,7 @@ console.log(JSON.stringify({
   version: pkg.version,
   source_ref: "working-tree",
   root_skill: "SKILL.md",
-  excluded: ["examples/", "tests/", "skills/lawyerbuddy-alipay/", "runtime/payment/", "services/"],
+    excluded: ["examples/", "tests/", "skills/lawyerbuddy-paid/", "services/"],
   entries: entries.length,
   size: fs.statSync(archive).size,
 }, null, 2));

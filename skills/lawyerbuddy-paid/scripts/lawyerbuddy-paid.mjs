@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 
 const RESOURCE_URL = 'https://snorlaxden.fun/v1/license/activate';
 const STATUS_URL = 'https://snorlaxden.fun/v1/license/status';
-const SKILL_VERSION = '1.9.1';
+const SKILL_VERSION = '1.9.2';
 const FEATURES = [
   'sorting', 'summarizing', 'timeline', 'similar-case-retrieval',
   'complaint-draft', 'document-drafting', 'contract-draft', 'contract-review'

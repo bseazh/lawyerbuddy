@@ -1,8 +1,8 @@
 ---
-name: lawyerbuddy
+name: lawyerbuddy-paid
 description: 面向律师的付费本地法律工作助手。首次使用通过支付宝 AI 按量付费接口完成 0.01 元永久授权激活；激活后本地执行案件材料整理、总结、时间轴、类案检索、文书和合同工作，不重复收费。
 metadata:
-  version: "1.9.1"
+  version: "1.9.2"
   payment:
     protocol: "HTTP 402"
     price: "0.01 CNY"
@@ -18,6 +18,14 @@ metadata:
 ---
 
 # LawyerBuddy Pay Skill
+
+本 Skill 可直接从 GitHub 安装，也可作为 SkillHub 付费包使用。GitHub 安装只负责把本地付费入口放入 Agent 的 Skills 目录；首次运行仍必须走下方支付宝授权流程。
+
+```bash
+npx skills add https://github.com/bseazh/lawyerbuddy --skill lawyerbuddy-paid
+```
+
+如果 Agent 只安装了本目录，还需要同时安装 `lawyerbuddy` 本地总路由或其他产品 Skill；本目录不上传案件材料，也不下载法律代码。
 
 本包是 SkillHub 付费版本。收费业务 API 是 LawyerBuddy 永久授权激活，不是代码下载：
 

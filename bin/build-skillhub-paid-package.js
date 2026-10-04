@@ -10,7 +10,7 @@ const version = pkg.version;
 const dist = path.join(root, 'dist');
 const bundle = path.join(dist, `lawyerbuddy-skillhub-paid-v${version}`);
 const archive = `${bundle}.zip`;
-const paidSource = path.join(root, 'packaging', 'skillhub-paid');
+const paidSource = path.join(root, 'skills', 'lawyerbuddy-paid');
 const maxFiles = 200;
 const supportedExtensions = new Set([
   '.md', '.py', '.js', '.mjs', '.json', '.txt', '.html', '.css', '.svg', '.png', '.jpg', '.jpeg'
@@ -24,8 +24,7 @@ function run(command, args, options = {}) {
 
 function include(relative) {
   const value = relative.split(path.sep).join('/');
-  if (value.startsWith('skills/lawyerbuddy-alipay/')
-      || value.startsWith('runtime/payment/')
+  if (value.startsWith('skills/lawyerbuddy-paid/')
       || value.startsWith('services/')
       || value.startsWith('examples/')
       || value.startsWith('tests/')) return false;
@@ -104,7 +103,9 @@ try {
   }
 
   const rootSkill = path.join(bundle, 'SKILL.md');
-  const skillText = fs.readFileSync(rootSkill, 'utf8');
+  const rootSkillText = fs.readFileSync(rootSkill, 'utf8').replace(/^name:\s*lawyerbuddy-paid\s*$/m, 'name: lawyerbuddy');
+  fs.writeFileSync(rootSkill, rootSkillText);
+  const skillText = rootSkillText;
   const requiredSignals = [
     'HTTP 402', 'Payment-Needed', 'Payment-Proof', 'probe', 'pay', 'complete', 'ack',
     'alipay.aipay.agent.payment.verify', 'alipay.aipay.agent.fulfillment.confirm', '订单持久化与幂等'

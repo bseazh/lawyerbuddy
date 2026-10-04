@@ -25,9 +25,7 @@ function run(command, args, options = {}) {
 
 function include(relative) {
   const value = relative.split(path.sep).join("/");
-  if (value === "skills/lawyerbuddy-alipay/SKILL.md"
-      || value.startsWith("skills/lawyerbuddy-alipay/")
-      || value.startsWith("runtime/payment/")
+  if (value.startsWith("skills/lawyerbuddy-paid/")
       || value.startsWith("services/")
       || value.startsWith("examples/")
       || value.startsWith("tests/")) return false;
