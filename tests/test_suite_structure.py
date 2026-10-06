@@ -87,6 +87,36 @@ class SuiteStructureTest(unittest.TestCase):
             self.assertIn(signal, skill)
         self.assertEqual(package["peerDependencies"]["@alipay/agent-payment"], "1.0.23")
 
+    def test_payment_client_routes_fake_ip_without_disabling_security(self) -> None:
+        import subprocess
+
+        script = ROOT / "skills" / "lawyerbuddy-paid" / "scripts" / "lawyerbuddy-paid.mjs"
+        check = subprocess.run(
+            [
+                "node",
+                "--input-type=module",
+                "--eval",
+                (
+                    f"import {{ isBlockedPaymentAddress }} from {json.dumps(script.as_uri())};"
+                    "console.log(JSON.stringify(["
+                    "isBlockedPaymentAddress('198.18.2.189'),"
+                    "isBlockedPaymentAddress('100.64.0.1'),"
+                    "isBlockedPaymentAddress('134.175.154.244')"
+                    "]));"
+                ),
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        self.assertEqual(json.loads(check.stdout), [True, True, False])
+        source = script.read_text(encoding="utf-8")
+        self.assertIn("https://134.175.154.244", source)
+        self.assertIn("PROXY_TARGET_BLOCKED", source)
+        self.assertNotIn("NODE_TLS_REJECT_UNAUTHORIZED", source)
+        self.assertNotIn("--insecure", source)
+
     def test_user_guide_covers_document_drafting_and_is_linked(self) -> None:
         guide = (ROOT / "docs" / "使用指南.md").read_text(encoding="utf-8")
         readme = (ROOT / "README.md").read_text(encoding="utf-8")

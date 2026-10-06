@@ -2,7 +2,7 @@
 name: lawyerbuddy-paid
 description: 面向律师的付费本地法律工作助手。首次使用通过支付宝 AI 按量付费接口完成 0.01 元永久授权激活；激活后本地执行案件材料整理、总结、时间轴、类案检索、文书和合同工作，不重复收费。
 metadata:
-  version: "1.9.3"
+  version: "1.9.4"
   payment:
     protocol: "HTTP 402"
     price: "0.01 CNY"
@@ -49,6 +49,8 @@ node .agents/skills/lawyerbuddy-paid/scripts/lawyerbuddy-paid.mjs probe --state-
 
 脚本只发送随机生成的 `client_id`、Skill 版本和功能列表，不发送案件材料、文件名或法律事实。
 
+网络兼容由脚本自动处理。若本机代理使用 Fake-IP，脚本会在验证受信任 HTTPS 证书后自动切换到同一服务器的公网 IP 入口；不得要求用户修改 Clash、DNS、`hosts` 或关闭安全校验。遇到网络错误只向用户显示简短结果，不扫描代理配置、不反复安装支付工具、不创建新订单。
+
 - 输出 `AUTHORIZED`：永久授权有效且已取得 12 小时会话凭证，可以进入业务路由。
 - 输出 `PAYMENT_REQUIRED`：已取得真实 `402` 和 `Payment-Needed`，继续支付流程。
 - 授权文件存在但验证失败：停止并向用户说明，不擅自创建新账单。
@@ -71,6 +73,8 @@ node .agents/skills/lawyerbuddy-paid/scripts/lawyerbuddy-paid.mjs pay \
 ```
 
 脚本调用官方 `alipay-bot 402-buyer-pay`，把保存的账单与原始请求交给支付宝。原样向用户展示官方输出和支付入口，然后停止，等待用户明确表示已付款或继续。
+
+若官方 CLI 返回 `PROXY_TARGET_BLOCKED`，脚本只会对固定的 LawyerBuddy 公网 IP HTTPS 入口自动重试一次；仍失败则停止并提示稍后重试。该兼容入口使用公开 CA 签发的 IP 证书，不能替换为任意地址，也不能关闭 TLS 或 SSRF 校验。
 
 ### `complete`：携带凭证重试并取得授权
 

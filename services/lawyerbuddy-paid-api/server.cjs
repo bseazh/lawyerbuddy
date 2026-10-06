@@ -93,7 +93,7 @@ function loadConfig() {
   const expectedMode = environment === 'production' ? 'alipay_production' : 'alipay_sandbox';
   if (mode !== expectedMode) throw new Error(`当前环境要求 PAYMENT_MODE=${expectedMode}`);
   const licenseSigning = loadLicenseSigningSecret();
-  const lawyerbuddyVersion = String(process.env.LAWYERBUDDY_VERSION || '1.9.3').trim();
+  const lawyerbuddyVersion = String(process.env.LAWYERBUDDY_VERSION || '1.9.4').trim();
   if (process.env.ALIPAY_CONFIG_SOURCE === 'sandbox_file') {
     if (environment !== 'sandbox') throw new Error('官方临时沙箱配置不能用于 production');
     const official = readOfficialSandboxConfig();

@@ -35,7 +35,7 @@ async function main() {
       ALIPAY_SERVICE_ID: 'api_mock_service_id',
       LICENSE_SIGNING_SECRET_FILE: secretFile,
       LAWYERBUDDY_DATA_DIR: path.join(temporary, 'data'),
-      LAWYERBUDDY_VERSION: '1.9.3'
+      LAWYERBUDDY_VERSION: '1.9.4'
     });
 
     const payment = { outTradeNo: '', resourceId: '' };
@@ -58,7 +58,7 @@ async function main() {
       server.once('error', reject);
     });
     const base = `http://127.0.0.1:${server.address().port}`;
-    const body = { client_id: 'local-test', skill_version: '1.9.3', features: ['sorting', 'timeline'] };
+    const body = { client_id: 'local-test', skill_version: '1.9.4', features: ['sorting', 'timeline'] };
 
     const health = await request(base, '/health');
     assert.equal(health.status, 200);

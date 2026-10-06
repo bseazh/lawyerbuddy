@@ -20,6 +20,7 @@ LawyerBuddy 是面向律师的授权制本地法律工作助手。它提供一�
 
 npx --yes skills add https://github.com/bseazh/lawyerbuddy --skill lawyerbuddy lawyerbuddy-paid --full-depth --copy --yes
 npx -y @alipay/alipay-aipay@latest install
+npx -y --registry=https://registry.npmjs.org @alipay/agent-payment@1.0.23 install-cli
 ```
 
 ### 第二步：首次激活
@@ -37,6 +38,8 @@ npx -y @alipay/alipay-aipay@latest install
 ```
 
 付款成功后取得永久授权，并生成有效期为 12 小时的会话凭证。会话到期后会使用永久授权免费续签，不会再次收费。
+
+支付脚本会自动处理 Clash 等代理软件的 Fake-IP 环境；用户无需修改 DNS、`hosts` 或代理设置。若支付网络暂时不可用，重新调用 `@lawyerbuddy-paid` 即可继续原订单，不会重复创建账单。
 
 ### 第三步：开始使用
 

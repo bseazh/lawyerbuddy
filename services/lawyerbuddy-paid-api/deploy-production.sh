@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 : "${LB_DEPLOY_HOST:?请设置 LB_DEPLOY_HOST，例如 ubuntu@snorlaxden.fun}"
 : "${LB_SERVER_DIR:?请设置 LB_SERVER_DIR，例如 /home/ubuntu/Project/lawyerbuddy-api}"
-: "${LB_RELEASE_VERSION:?请设置 LB_RELEASE_VERSION，例如 1.9.3}"
+: "${LB_RELEASE_VERSION:?请设置 LB_RELEASE_VERSION，例如 1.9.4}"
 
 repo_dir="$(cd "$(dirname "$0")" && pwd)"
 [[ "$LB_RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
@@ -83,14 +83,15 @@ fi
 
 health_ready=0
 for attempt in {1..20}; do
-  if curl --fail --silent --show-error https://snorlaxden.fun/health >/dev/null 2>&1; then
+  if curl --fail --silent --show-error https://snorlaxden.fun/health >/dev/null 2>&1 \
+    && curl --fail --silent --show-error https://134.175.154.244/health >/dev/null 2>&1; then
     health_ready=1
     break
   fi
   sleep 0.5
 done
 if [[ "$health_ready" != "1" ]]; then
-  echo "健康检查在 10 秒内未恢复" >&2
+  echo "域名或公网 IP 健康检查在 10 秒内未恢复" >&2
   rollback
   exit 1
 fi
@@ -106,6 +107,15 @@ activation_status="$(curl --silent --output /dev/null --write-out '%{http_code}'
   --data "{\"client_id\":\"deployment-preflight\",\"skill_version\":\"$release_version\",\"features\":[\"sorting\"]}")"
 [[ "$activation_status" == "402" ]] || {
   echo "授权激活预检状态异常：$activation_status" >&2
+  rollback
+  exit 1
+}
+ip_activation_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+  -X POST https://134.175.154.244/v1/license/activate \
+  -H 'Content-Type: application/json' \
+  --data "{\"client_id\":\"deployment-ip-preflight\",\"skill_version\":\"$release_version\",\"features\":[\"sorting\"]}")"
+[[ "$ip_activation_status" == "402" ]] || {
+  echo "公网 IP 授权激活预检状态异常：$ip_activation_status" >&2
   rollback
   exit 1
 }

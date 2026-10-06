@@ -1,6 +1,6 @@
 {
   "name": "lawyerbuddy-skillhub-paid",
-  "version": "1.9.3",
+  "version": "1.9.4",
   "private": true,
   "description": "LawyerBuddy SkillHub 付费激活客户端",
   "type": "module",
