@@ -4,31 +4,25 @@ LawyerBuddy 是面向律师的授权制本地法律工作助手。它提供一�
 
 本项目按本地文件工作。案件材料只在当前工作区读取，原始材料默认保持不变；不会上传案件材料。首次使用支付 `0.01 元`取得永久授权；每次业务调用在线验证 12 小时会话凭证，到期后免费续签。所有报告和建议都需要律师复核，不替律师作法律结论。
 
-## 目录
+## 3 分钟快速开始
+
+日常使用只需记住两个入口：
+
+- `@lawyerbuddy-paid`：首次付费激活或检查授权。
+- `@lawyerbuddy`：办理材料整理、案件总结、时间轴、类案检索、文书和合同任务。
+
+### 第一步：安装
+
+需要 Node.js 18 或更高版本。在案件工作区打开 Codex、Claude Code、WorkBuddy 等能够访问本地文件的 Agent，把下面整段内容发给它：
 
 ```text
-SKILL.md                         总路由
-skills/                          产品 Skill 与参考规则
-runtime/routing/                 路由、流程和共享契约
-runtime/capabilities/            内置中文法律能力
-docs/使用指南.md                  面向律师的操作示例
-```
+请依次执行以下命令安装 LawyerBuddy 和支付宝 AI 付能力，并为远程安装预留至少 5 分钟：
 
-## 最快开始
-
-### 1. 安装
-
-需要 Node.js 18 或更高版本。把下面的提示词直接交给 Codex、Claude Code、WorkBuddy 等能够访问本地文件的 Agent：
-
-```text
-请从 GitHub 安装 LawyerBuddy 总路由和授权入口。总路由目录已经包含全部产品 Skill、共享运行层和模板：
 npx --yes skills add https://github.com/bseazh/lawyerbuddy --skill lawyerbuddy lawyerbuddy-paid --full-depth --copy --yes
 npx -y @alipay/alipay-aipay@latest install
 ```
 
-远程安装第一次可能需要几分钟；请给 Agent 至少 5 分钟的命令等待时间。安装后先在对话中调用 `@lawyerbuddy-paid` 完成授权启动，再使用任何业务 Skill。安装器不会自动安装大体积 OCR、PDF 或浏览器组件，只有任务需要时再按 `INSTALL.md` 补装。
-
-### 2. 授权启动
+### 第二步：首次激活
 
 ```text
 @lawyerbuddy-paid
@@ -36,15 +30,15 @@ npx -y @alipay/alipay-aipay@latest install
 请检查并启动 LawyerBuddy 授权。
 ```
 
-首次使用进入支付宝 `0.01 元`支付流程。付款成功后保存永久授权并取得 12 小时会话凭证；以后会话凭证到期时自动重新验证永久授权，不重复收费。每次调用总路由或产品 Skill 都必须先在线验权，未输出 `AUTHORIZED` 时不会读取案件材料。
+首次使用的预期流程：
 
-### 3. 提供案件文件夹
+```text
+未授权 -> 支付 0.01 元 -> AUTHORIZED -> 开始办理业务
+```
 
-- macOS：在 Finder 选中文件夹，按 `Option + Command + C` 复制绝对路径。
-- Windows：按住 `Shift` 右键文件夹，选择“复制为路径”；也可以按 `Alt + D` 复制地址栏。
-- 也可以在 Agent 中使用 “Open Folder” 或 “Add Folder to Workspace”。
+付款成功后取得永久授权，并生成有效期为 12 小时的会话凭证。会话到期后会使用永久授权免费续签，不会再次收费。
 
-### 4. 开始整理
+### 第三步：开始使用
 
 ```text
 @lawyerbuddy
@@ -54,6 +48,32 @@ npx -y @alipay/alipay-aipay@latest install
 
 先检查材料和录音逐字稿，再提出案由候选。请展示案件名称、目录树、文件改名预览和待确认事项；等我确认后再复制归档。完成后请给出整理结果、报告和时间轴的绝对路径。
 ```
+
+以后继续使用时，直接调用总入口即可：
+
+```text
+@lawyerbuddy
+
+请继续整理这个案件，并根据已确认材料生成案件报告和可视化时间轴。
+```
+
+总路由会自动选择对应的产品 Skill。只有需要精确控制流程时，才需要直接调用下文列出的子 Skill。
+
+## 项目目录
+
+```text
+SKILL.md                         总路由
+skills/                          产品 Skill 与参考规则
+runtime/routing/                 路由、流程和共享契约
+runtime/capabilities/            内置中文法律能力
+docs/使用指南.md                  面向律师的操作示例
+```
+
+## 提供案件文件夹
+
+- macOS：在 Finder 选中文件夹，按 `Option + Command + C` 复制绝对路径。
+- Windows：按住 `Shift` 右键文件夹，选择“复制为路径”；也可以按 `Alt + D` 复制地址栏。
+- 也可以在 Agent 中使用 “Open Folder” 或 “Add Folder to Workspace”。
 
 发现录音但没有逐字稿时，先保留录音原件并列出缺失清单；补齐逐字稿后再继续案件分析。案件整理默认先给出快速初稿和可视化时间轴，之后可按金额、付款、主体、合同关系或指定材料继续核对。
 
@@ -194,6 +214,20 @@ npm run pack:skillhub:paid
 
 ## 版本更新
 
-更新后重新运行打包命令，并上传新的版本文件夹或 ZIP。建议先在一份测试案件文件夹上验证目录树预览、归档结果、案件报告和时间轴，再交给律师使用。
+在原安装工作区运行：
+
+```bash
+npx --yes skills update lawyerbuddy lawyerbuddy-paid --project --yes
+```
+
+更新后重新调用 `@lawyerbuddy-paid` 检查授权，再调用 `@lawyerbuddy`。维护者发布新版本后应重新运行打包命令，并先用一份测试案件验证目录树预览、归档结果、案件报告和时间轴。
+
+## 隐私与授权
+
+- 案件材料、文件名和法律事实在本地处理，不发送给授权服务器。
+- 授权请求只包含随机客户端标识、Skill 版本和功能列表。
+- 本地授权文件保存在 `.lawyerbuddy-license`，不得提交到 Git、转发或与他人共用。
+- 每次业务调用都会在线检查授权；未取得 `AUTHORIZED` 时，不会继续读取案件材料或生成结果。
+- LawyerBuddy 生成的报告和建议均需律师复核，不替律师作法律结论。
 
 更多可复制提示词见 [`docs/使用指南.md`](./docs/使用指南.md)，安装环境说明见 [`INSTALL.md`](./INSTALL.md)。
