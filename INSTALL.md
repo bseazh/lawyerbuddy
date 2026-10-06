@@ -6,7 +6,7 @@
 
 ### 1. 一次性安装器安全检查
 
-先确认电脑已有 Node.js 18 或更高版本以及 Git。首次安装或切换版本时，检查同一版本标签下的 `package.json` 和 `bin/cli.js`。本文以 `v1.9.2` 为例：
+先确认电脑已有 Node.js 18 或更高版本以及 Git。首次安装或切换版本时，检查同一版本标签下的 `package.json` 和 `bin/cli.js`。本文以 `v1.9.3` 为例：
 
 - `package.json` 不应包含 `preinstall`、`install`、`postinstall` 等自动执行脚本；
 - `bin/cli.js` 的 `install` 应先把清单中的全部 Skill 和共享运行层复制到 `.agents` 下的临时目录，完整后再迁入正式位置，并把已审查的 CLI 复制为总路由的本地 `scripts/doctor.js`；
@@ -19,7 +19,7 @@
 在目标项目目录中运行：
 
 ```bash
-npx --yes github:bseazh/lawyerbuddy#v1.9.2 install
+npx --yes github:bseazh/lawyerbuddy#v1.9.3 install
 ```
 
 Agent 执行远程 `npx github:` 命令时，应把工具等待时间设为至少 300 秒。若工具单次等待上限不足，应保留同一执行会话并持续轮询，累计至少等待 300 秒，不主动终止进程。这里的 300 秒是 Agent 工具参数，不是在命令前额外添加 `timeout`。

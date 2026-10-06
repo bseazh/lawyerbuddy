@@ -1,8 +1,8 @@
 # LawyerBuddy
 
-LawyerBuddy 是面向律师的本地法律工作助手。它提供一个总路由和八个可按需调用的产品 Skill：材料整理、案件总结、关键时间轴、类案检索、起诉状起草、其他法律文书起草、合同起草和合同审查。
+LawyerBuddy 是面向律师的授权制本地法律工作助手。它提供一个总路由和八个可按需调用的产品 Skill：材料整理、案件总结、关键时间轴、类案检索、起诉状起草、其他法律文书起草、合同起草和合同审查。
 
-本项目按本地文件工作。案件材料只在当前工作区读取，原始材料默认保持不变；不会自动上传案件材料、下载外部代码或执行未知程序。所有报告和建议都需要律师复核，不替律师作法律结论。
+本项目按本地文件工作。案件材料只在当前工作区读取，原始材料默认保持不变；不会上传案件材料。首次使用支付 `0.01 元`取得永久授权；每次业务调用在线验证 12 小时会话凭证，到期后免费续签。所有报告和建议都需要律师复核，不替律师作法律结论。
 
 ## 目录
 
@@ -21,20 +21,30 @@ docs/使用指南.md                  面向律师的操作示例
 需要 Node.js 18 或更高版本。把下面的提示词直接交给 Codex、Claude Code、WorkBuddy 等能够访问本地文件的 Agent：
 
 ```text
-请安装并检查 LawyerBuddy：
-npx --yes github:bseazh/lawyerbuddy#v1.9.2 install
-node .agents/skills/lawyerbuddy/scripts/doctor.js doctor
+请从 GitHub 安装 LawyerBuddy 总路由和授权入口。总路由目录已经包含全部产品 Skill、共享运行层和模板：
+npx --yes skills add https://github.com/bseazh/lawyerbuddy --skill lawyerbuddy lawyerbuddy-paid --full-depth --copy --yes
+npx -y @alipay/alipay-aipay@latest install
 ```
 
-远程安装第一次可能需要几分钟；请给 Agent 至少 5 分钟的命令等待时间。安装器不会自动安装大体积 OCR、PDF 或浏览器组件，只有任务需要时再按 `INSTALL.md` 补装。
+远程安装第一次可能需要几分钟；请给 Agent 至少 5 分钟的命令等待时间。安装后先在对话中调用 `@lawyerbuddy-paid` 完成授权启动，再使用任何业务 Skill。安装器不会自动安装大体积 OCR、PDF 或浏览器组件，只有任务需要时再按 `INSTALL.md` 补装。
 
-### 2. 提供案件文件夹
+### 2. 授权启动
+
+```text
+@lawyerbuddy-paid
+
+请检查并启动 LawyerBuddy 授权。
+```
+
+首次使用进入支付宝 `0.01 元`支付流程。付款成功后保存永久授权并取得 12 小时会话凭证；以后会话凭证到期时自动重新验证永久授权，不重复收费。每次调用总路由或产品 Skill 都必须先在线验权，未输出 `AUTHORIZED` 时不会读取案件材料。
+
+### 3. 提供案件文件夹
 
 - macOS：在 Finder 选中文件夹，按 `Option + Command + C` 复制绝对路径。
 - Windows：按住 `Shift` 右键文件夹，选择“复制为路径”；也可以按 `Alt + D` 复制地址栏。
 - 也可以在 Agent 中使用 “Open Folder” 或 “Add Folder to Workspace”。
 
-### 3. 开始整理
+### 4. 开始整理
 
 ```text
 @lawyerbuddy
@@ -177,11 +187,10 @@ B. 自定义一级、二级目录
 
 ```bash
 npm run pack:workbuddy
-npm run pack:skillhub
 npm run pack:skillhub:paid
 ```
 
-SkillHub 包只包含本地法律工作所需的总路由、产品 Skill、共享规则和内置能力，不包含测试文件、本地缓存、Python 字节码、密钥或服务器配置。打包器会检查根 `SKILL.md` 的 YAML `name` 与 `description`，并确保 ZIP 第一项是根入口。付费入口的安装与运行说明位于 `skills/lawyerbuddy-paid/`，不会进入免费本地包。
+两个发布包都包含授权门禁和本地法律工作能力，不包含测试文件、本地缓存、Python 字节码、支付宝私钥或服务器配置。SkillHub 使用 `lawyerbuddy-skillhub-paid-v版本.zip`；WorkBuddy 使用 `lawyerbuddy-workbuddy-v版本.zip`。
 
 ## 版本更新
 

@@ -35,7 +35,7 @@ async function main() {
       ALIPAY_SERVICE_ID: 'api_mock_service_id',
       LICENSE_SIGNING_SECRET_FILE: secretFile,
       LAWYERBUDDY_DATA_DIR: path.join(temporary, 'data'),
-      LAWYERBUDDY_VERSION: '1.9.1'
+      LAWYERBUDDY_VERSION: '1.9.3'
     });
 
     const payment = { outTradeNo: '', resourceId: '' };
@@ -58,7 +58,7 @@ async function main() {
       server.once('error', reject);
     });
     const base = `http://127.0.0.1:${server.address().port}`;
-    const body = { client_id: 'local-test', skill_version: '1.9.1', features: ['sorting', 'timeline'] };
+    const body = { client_id: 'local-test', skill_version: '1.9.3', features: ['sorting', 'timeline'] };
 
     const health = await request(base, '/health');
     assert.equal(health.status, 200);
@@ -131,6 +131,35 @@ async function main() {
     assert.equal(validLicense.status, 200);
     assert.equal(validLicense.body.active, true);
 
+    const session = await request(base, '/v1/license/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${activated.body.license_token}`, 'X-Client-Id': body.client_id },
+      body: JSON.stringify({ client_id: body.client_id })
+    });
+    assert.equal(session.status, 200, JSON.stringify(session.body));
+    assert.ok(session.body.session_token);
+    assert.equal(session.body.ttl_seconds, 43200);
+
+    const sessionStatus = await request(base, '/v1/license/session/status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.body.session_token}`, 'X-Client-Id': body.client_id },
+      body: JSON.stringify({ client_id: body.client_id })
+    });
+    assert.equal(sessionStatus.status, 200, JSON.stringify(sessionStatus.body));
+    assert.equal(sessionStatus.body.active, true);
+
+    const copiedSession = await request(base, '/v1/license/session/status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.body.session_token}`, 'X-Client-Id': 'another-client' },
+      body: JSON.stringify({ client_id: 'another-client' })
+    });
+    assert.equal(copiedSession.status, 401);
+
+    const sessionWithoutLicense = await request(base, '/v1/license/session', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer invalid' }, body: JSON.stringify({ client_id: body.client_id })
+    });
+    assert.equal(sessionWithoutLicense.status, 401);
+
     const download = await request(base, '/v1/skill/download');
     assert.equal(download.status, 410);
     assert.equal(download.body.code, 'DOWNLOAD_DISABLED');
@@ -140,7 +169,7 @@ async function main() {
     });
     assert.equal(invalidLicense.status, 401);
     assert.ok(fs.statSync(path.join(temporary, 'data', 'orders.json')).size > 0);
-    console.log('license API checks passed: 402, proof verification, fulfillment, stable retry token, status validation, mismatch=409, download=410');
+    console.log('license API checks passed: 402, proof verification, fulfillment, stable retry token, 12h session gate, mismatch=409, download=410');
   } finally {
     if (server) await new Promise((resolve) => server.close(resolve));
     fs.rmSync(temporary, { recursive: true, force: true });

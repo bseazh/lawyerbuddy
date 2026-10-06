@@ -5,6 +5,10 @@ description: LawyerBuddy 关键时间轴入口。用户已有经过确认并执�
 
 # 关键时间轴可视化
 
+## 授权前置门禁
+
+读取案件报告或时间轴数据前，必须先定位并执行共享的 `authorization-gate.md`（GitHub Skills CLI 总路由默认位于 `.agents/skills/lawyerbuddy/runtime/references/`，旧安装器位于 `.agents/lawyerbuddy/references/`，整包位于 `runtime/references/`）。只有本次检查输出 `status: AUTHORIZED` 才能继续；否则立即停止并提示先调用 `@lawyerbuddy-paid`。
+
 本 Skill 复用 `lawyerbuddy-sorting` 已验证的事件模型、时间轴规则和生成脚本。
 
 ## 执行要求

@@ -5,6 +5,10 @@ description: 根据案情、证据或现有稿件起草中国大陆民事起诉�
 
 # LawyerBuddy 起诉状起草
 
+## 授权前置门禁
+
+读取案情、证据或模板前，必须先定位并执行共享的 `authorization-gate.md`（GitHub Skills CLI 总路由默认位于 `.agents/skills/lawyerbuddy/runtime/references/`，旧安装器位于 `.agents/lawyerbuddy/references/`，整包位于 `runtime/references/`）。只有本次检查输出 `status: AUTHORIZED` 才能继续；否则立即停止并提示先调用 `@lawyerbuddy-paid`。
+
 形成与用户诉讼目标一致、事实可追溯、诉请可执行的起诉状。模板只是结构和措辞参考，不是案情事实或已核验法律。
 
 ## 资料和边界

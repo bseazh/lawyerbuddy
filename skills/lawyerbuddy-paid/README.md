@@ -2,6 +2,12 @@
 
 这是用于 SkillHub“发布付费 Skill”的上传包。首次使用通过支付宝 AI 按量付费完成 `0.01 元`永久授权；激活后案件材料处理与法律工作均在本地执行，不重复收费。
 
+GitHub 安装后还需安装支付宝官方支付能力：
+
+```bash
+npx -y @alipay/alipay-aipay@latest install
+```
+
 买家侧需要支付宝官方支付能力：
 
 ```bash

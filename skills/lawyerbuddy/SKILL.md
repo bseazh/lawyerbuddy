@@ -5,6 +5,10 @@ description: LawyerBuddy 总路由。用户提出案件材料分类、案件总�
 
 # LawyerBuddy 总路由
 
+## 授权前置门禁
+
+每次调用本 Skill，必须先定位并执行共享的 `authorization-gate.md`（GitHub Skills CLI 总路由默认位于 `.agents/skills/lawyerbuddy/runtime/references/`，旧安装器位于 `.agents/lawyerbuddy/references/`，整包位于 `runtime/references/`）。仅当输出 `status: AUTHORIZED` 时继续路由；否则立即停止，不读取案件材料，并提示用户先调用 `@lawyerbuddy-paid`；平台未单独注册该名称时读取同包 `skills/lawyerbuddy-paid/SKILL.md`。
+
 本 Skill 只负责识别任务、检查前置成果和选择产品 Skill，不重复执行具体法律工作。
 
 ## 路由规则

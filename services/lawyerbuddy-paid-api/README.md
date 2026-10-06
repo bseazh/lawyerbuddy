@@ -11,7 +11,7 @@
 ```json
 {
   "client_id": "设备或用户标识",
-  "skill_version": "1.9.2",
+  "skill_version": "1.9.3",
   "features": ["sorting", "summarizing", "timeline"]
 }
 ```
@@ -22,6 +22,14 @@
 
 通过请求体 `license_token` 或 `Authorization: Bearer <token>` 验证授权。只有签名有效且授权记录仍存在时返回 `active: true`。
 
+### `POST /v1/license/session`
+
+使用永久 `license_token` 和匹配的 `client_id` 签发 12 小时会话凭证，不创建订单、不重复收费。
+
+### `POST /v1/license/session/status`
+
+每次业务调用验证会话签名、到期时间、客户端和底层永久授权。验证失败时产品 Skill 必须停止，不读取案件材料。
+
 ### `GET /v1/skill/download`
 
 固定返回 `410 DOWNLOAD_DISABLED`。服务端不再交付 ZIP 或任何代码。
@@ -31,7 +39,7 @@
 复制 `.env.example` 为 `.env`，填写支付宝环境变量和版本号：
 
 ```text
-LAWYERBUDDY_VERSION=1.9.2
+LAWYERBUDDY_VERSION=1.9.3
 ```
 
 如果未设置 `LICENSE_SIGNING_SECRET_FILE`，服务首次启动会自动生成 `data/license-signing-secret`，权限为 `0600`，后续部署继续使用同一文件。请随服务器数据一并备份。也可以显式指定独立密钥文件：
@@ -56,7 +64,7 @@ npm start
 ```bash
 curl -i -X POST http://127.0.0.1:3000/v1/license/activate \
   -H 'Content-Type: application/json' \
-  -d '{"client_id":"local-test","skill_version":"1.9.2","features":["sorting"]}'
+  -d '{"client_id":"local-test","skill_version":"1.9.3","features":["sorting"]}'
 ```
 
 预期返回 `HTTP 402` 和 `Payment-Needed`。旧下载接口应返回 `410`。真实付款、验付和履约只能通过支付宝官方买家流程完成；未实际付款时不能称为正式支付测试通过。
@@ -70,7 +78,7 @@ curl -i -X POST http://127.0.0.1:3000/v1/license/activate \
 ```bash
 export LB_DEPLOY_HOST=ubuntu@snorlaxden.fun
 export LB_SERVER_DIR=/home/ubuntu/Project/lawyerbuddy-api
-export LB_RELEASE_VERSION=1.9.2
+export LB_RELEASE_VERSION=1.9.3
 export LB_SSH_KEY=/绝对路径/lawyerbuddy_paid_deploy_ed25519
 ./services/lawyerbuddy-paid-api/deploy-production.sh
 ```

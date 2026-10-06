@@ -7,7 +7,9 @@ import { spawnSync } from 'node:child_process';
 
 const RESOURCE_URL = 'https://snorlaxden.fun/v1/license/activate';
 const STATUS_URL = 'https://snorlaxden.fun/v1/license/status';
-const SKILL_VERSION = '1.9.2';
+const SESSION_URL = 'https://snorlaxden.fun/v1/license/session';
+const SESSION_STATUS_URL = 'https://snorlaxden.fun/v1/license/session/status';
+const SKILL_VERSION = '1.9.3';
 const FEATURES = [
   'sorting', 'summarizing', 'timeline', 'similar-case-retrieval',
   'complaint-draft', 'document-drafting', 'contract-draft', 'contract-review'
@@ -93,6 +95,57 @@ async function checkStoredLicense(directory) {
   return body;
 }
 
+async function postAuthorization(url, token, clientId) {
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'X-Client-Id': clientId
+      },
+      body: JSON.stringify({ client_id: clientId }),
+      signal: AbortSignal.timeout(30000)
+    });
+    const body = await response.json().catch(() => ({}));
+    return { response, body };
+  } catch (error) {
+    fail(`授权服务暂时无法访问，已停止本次业务操作：${error.message}`, 4);
+  }
+}
+
+async function gate(directory) {
+  const clientId = clientIdentity(directory);
+  const sessionFile = path.join(directory, 'session.json');
+  const session = readJson(sessionFile, false);
+  if (session?.session_token) {
+    const checked = await postAuthorization(SESSION_STATUS_URL, session.session_token, clientId);
+    if (checked.response.ok && checked.body.active === true) {
+      console.log(JSON.stringify({ status: 'AUTHORIZED', expires_at: checked.body.expires_at }, null, 2));
+      return;
+    }
+    if (!['SESSION_INVALID', 'SESSION_EXPIRED'].includes(checked.body.code)) {
+      fail(`会话授权检查失败：${checked.body.message || checked.response.status}`, 4);
+    }
+  }
+
+  const license = readJson(path.join(directory, 'license.json'), false);
+  if (!license?.license_token) {
+    fail('AUTHORIZATION_REQUIRED：当前项目尚未完成 LawyerBuddy 激活。请先调用 @lawyerbuddy-paid，业务材料尚未读取。', 3);
+  }
+  const started = await postAuthorization(SESSION_URL, license.license_token, clientId);
+  if (!started.response.ok || started.body.active !== true || !started.body.session_token) {
+    fail(`AUTHORIZATION_REQUIRED：${started.body.message || '永久授权无效，请先调用 @lawyerbuddy-paid'}`, 3);
+  }
+  writeJson(sessionFile, {
+    session_token: started.body.session_token,
+    issued_at: started.body.issued_at,
+    expires_at: started.body.expires_at,
+    client_id: clientId
+  });
+  console.log(JSON.stringify({ status: 'AUTHORIZED', renewed: true, expires_at: started.body.expires_at }, null, 2));
+}
+
 function newOutTradeNo() {
   return `LBORDER_${Date.now()}_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
 }
@@ -100,8 +153,7 @@ function newOutTradeNo() {
 async function probe(directory) {
   const active = await checkStoredLicense(directory);
   if (active) {
-    console.log(JSON.stringify({ status: 'ACTIVE', license: active }, null, 2));
-    return;
+    return gate(directory);
   }
 
   const request = {
@@ -156,7 +208,7 @@ async function probe(directory) {
 function requireAlipayBot() {
   const result = spawnSync('alipay-bot', ['--version'], { encoding: 'utf8' });
   if (result.error?.code === 'ENOENT') {
-    fail('缺少官方 alipay-bot。请按 Skill 依赖安装 @alipay/agent-payment@1.0.23 后重试。');
+    fail('缺少官方 alipay-bot。请先运行 npx -y @alipay/alipay-aipay@latest install，再重新调用 @lawyerbuddy-paid。');
   }
   if (result.error || result.status !== 0) fail(result.stderr || result.error?.message || 'alipay-bot 无法运行');
 }
@@ -224,6 +276,7 @@ async function complete(directory, options) {
       const body = await response.json().catch(() => ({}));
       if (response.ok && body.active === true) {
         writeJson(path.join(directory, 'license.json'), { license_token: token, ...body, saved_at: new Date().toISOString() });
+        await gate(directory);
       }
     }
   }
@@ -241,10 +294,11 @@ function ack(options) {
 async function main() {
   const { command, options } = parseArgs(process.argv.slice(2));
   if (command === 'ack') return ack(options);
-  if (!['probe', 'pay', 'complete', 'status'].includes(command)) {
-    fail('用法：lawyerbuddy-paid.mjs probe|pay|complete|status|ack [参数]');
+  if (!['probe', 'pay', 'complete', 'status', 'gate'].includes(command)) {
+    fail('用法：lawyerbuddy-paid.mjs probe|pay|complete|status|gate|ack [参数]');
   }
   const directory = stateDirectory(options['state-dir']);
+  if (command === 'gate') return gate(directory);
   if (command === 'probe' || command === 'status') {
     const active = command === 'status' ? await checkStoredLicense(directory) : null;
     if (command === 'status') {

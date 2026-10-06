@@ -3,6 +3,7 @@
   "suite": "lawyerbuddy",
   "skills": [
     { "name": "lawyerbuddy", "role": "router", "status": "ready" },
+    { "name": "lawyerbuddy-paid", "role": "authorization", "status": "ready" },
     { "name": "lawyerbuddy-sorting", "role": "product", "status": "ready" },
     { "name": "lawyerbuddy-summarizing", "role": "product", "status": "ready", "uses": ["lawyerbuddy-sorting"] },
     { "name": "lawyerbuddy-timeline", "role": "product", "status": "ready", "uses": ["lawyerbuddy-sorting"] },

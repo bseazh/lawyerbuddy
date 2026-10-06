@@ -5,6 +5,10 @@ description: LawyerBuddy 通用法律文书起草入口。用户要求起草或�
 
 # 法律文书起草
 
+## 授权前置门禁
+
+读取案情或开始起草前，必须先定位并执行共享的 `authorization-gate.md`（GitHub Skills CLI 总路由默认位于 `.agents/skills/lawyerbuddy/runtime/references/`，旧安装器位于 `.agents/lawyerbuddy/references/`，整包位于 `runtime/references/`）。只有本次检查输出 `status: AUTHORIZED` 才能继续；否则立即停止并提示先调用 `@lawyerbuddy-paid`。
+
 ## 执行流程
 
 1. 本 Skill 不承接民事起诉状或合同协议起草；分别转入 `lawyerbuddy-complaint-draft` 或 `lawyerbuddy-contract-draft`。确认其他文书类型、用户立场、程序阶段、目标读者和交付格式；关键信息缺失时先列出缺失清单。

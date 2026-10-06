@@ -5,6 +5,10 @@ description: LawyerBuddy 材料分类入口。整理用户指定的案件材料�
 
 # 案件材料整理
 
+## 授权前置门禁
+
+读取任何案件材料前，必须先定位并执行共享的 `authorization-gate.md`（GitHub Skills CLI 总路由默认位于 `.agents/skills/lawyerbuddy/runtime/references/`，旧安装器位于 `.agents/lawyerbuddy/references/`，整包位于 `runtime/references/`）。只有本次检查输出 `status: AUTHORIZED` 才能继续；否则立即停止并提示先调用 `@lawyerbuddy-paid`。
+
 本 Skill 处理用户指定的“现成文件夹”，不负责解压，不默认扫描文件夹外内容。
 
 ## 必须遵守

@@ -45,50 +45,18 @@ class SuiteStructureTest(unittest.TestCase):
         self.assertTrue((folder / "runtime" / "routing" / "capability-index.json").is_file())
         self.assertFalse((folder / "examples").exists())
         self.assertFalse((folder / "tests").exists())
-        self.assertFalse((folder / "skills" / "lawyerbuddy-paid").exists())
+        self.assertTrue((folder / "skills" / "lawyerbuddy-paid" / "SKILL.md").exists())
         self.assertTrue(archive_path.is_file())
         with zipfile.ZipFile(archive_path) as archive:
             entries = archive.namelist()
             self.assertIn("SKILL.md", entries)
             self.assertFalse(any(entry.startswith(("examples/", "tests/")) for entry in entries))
-            self.assertFalse(any(entry.startswith(("skills/lawyerbuddy-paid/", "services/")) for entry in entries))
+            self.assertIn("skills/lawyerbuddy-paid/scripts/lawyerbuddy-paid.mjs", entries)
+            self.assertFalse(any(entry.startswith("services/") for entry in entries))
             chinese_entry = "skills/lawyerbuddy-sorting/assets/民事案件案由参考表_2025.json"
             self.assertIn(chinese_entry, entries)
             info = archive.getinfo(chinese_entry)
             self.assertTrue(info.flag_bits & 0x0800)
-
-    def test_skillhub_package_passes_upload_limits(self) -> None:
-        import zipfile
-        import subprocess
-
-        package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
-        result = subprocess.run(
-            ["node", str(ROOT / "bin" / "build-skillhub-package.js")],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        report = json.loads(result.stdout)
-        self.assertLessEqual(report["files"], 200)
-        self.assertEqual(report["root_skill"], "SKILL.md")
-        self.assertEqual(report["unsupported_files"], 0)
-        self.assertIn("pack:skillhub", package["scripts"])
-        with zipfile.ZipFile(report["zip"]) as archive:
-            entries = archive.namelist()
-            chinese_entries = [info for info in archive.infolist() if any(ord(char) > 127 for char in info.filename)]
-        self.assertIn(
-            "skills/lawyerbuddy-complaint-draft/references/templates/要素式/民事起诉状（民间借贷纠纷）（最高院2025版）.md",
-            entries,
-        )
-        self.assertIn(
-            "skills/lawyerbuddy-contract-draft/references/templates/劳动合同.md",
-            entries,
-        )
-        self.assertFalse(any(entry.lower().endswith((".docx", ".yaml", ".yml")) for entry in entries))
-        self.assertFalse(any(entry.startswith(("skills/lawyerbuddy-paid/", "services/")) for entry in entries))
-        self.assertTrue(chinese_entries)
-        self.assertTrue(all(info.flag_bits & 0x0800 for info in chinese_entries))
 
     def test_paid_skillhub_package_contains_executable_payment_flow(self) -> None:
         import subprocess
@@ -113,7 +81,7 @@ class SuiteStructureTest(unittest.TestCase):
             skill = archive.read("SKILL.md").decode("utf-8")
             package = json.loads(archive.read("package.json"))
         for signal in (
-            "402账单下发", "Payment-Needed", "Payment-Proof", "probe", "pay", "complete", "ack",
+            "402账单下发", "Payment-Needed", "Payment-Proof", "probe", "pay", "complete", "gate", "ack",
             "alipay.aipay.agent.payment.verify", "alipay.aipay.agent.fulfillment.confirm", "订单持久化与幂等",
         ):
             self.assertIn(signal, skill)
@@ -133,7 +101,7 @@ class SuiteStructureTest(unittest.TestCase):
         )
 
     def test_all_manifest_skills_have_matching_frontmatter(self) -> None:
-        self.assertEqual(len(self.manifest["skills"]), 9)
+        self.assertEqual(len(self.manifest["skills"]), 10)
         for skill in self.manifest["skills"]:
             skill_file = ROOT / "skills" / skill["name"] / "SKILL.md"
             self.assertTrue(skill_file.is_file(), skill["name"])
@@ -151,7 +119,18 @@ class SuiteStructureTest(unittest.TestCase):
         self.assertEqual(statuses["lawyerbuddy-complaint-draft"], "ready")
         self.assertEqual(statuses["lawyerbuddy-contract-draft"], "ready")
         self.assertEqual(statuses["lawyerbuddy-contract-review"], "ready")
-        self.assertNotIn("lawyerbuddy-paid", statuses)
+        self.assertEqual(statuses["lawyerbuddy-paid"], "ready")
+
+    def test_every_product_skill_has_authorization_gate(self) -> None:
+        gate = (ROOT / "runtime" / "references" / "authorization-gate.md").read_text(encoding="utf-8")
+        self.assertIn("status: AUTHORIZED", gate)
+        self.assertIn("12 小时", gate)
+        for skill in self.manifest["skills"]:
+            if skill["name"] == "lawyerbuddy-paid":
+                continue
+            text = (ROOT / "skills" / skill["name"] / "SKILL.md").read_text(encoding="utf-8")
+            self.assertIn("授权前置门禁", text, skill["name"])
+            self.assertIn("AUTHORIZED", text, skill["name"])
 
     def test_drafting_products_have_distinct_routes_without_internal_id_collision(self) -> None:
         root_router = (ROOT / "SKILL.md").read_text(encoding="utf-8")

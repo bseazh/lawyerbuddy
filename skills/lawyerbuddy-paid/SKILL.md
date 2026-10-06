@@ -2,7 +2,7 @@
 name: lawyerbuddy-paid
 description: 面向律师的付费本地法律工作助手。首次使用通过支付宝 AI 按量付费接口完成 0.01 元永久授权激活；激活后本地执行案件材料整理、总结、时间轴、类案检索、文书和合同工作，不重复收费。
 metadata:
-  version: "1.9.2"
+  version: "1.9.3"
   payment:
     protocol: "HTTP 402"
     price: "0.01 CNY"
@@ -22,7 +22,7 @@ metadata:
 本 Skill 可直接从 GitHub 安装，也可作为 SkillHub 付费包使用。GitHub 安装只负责把本地付费入口放入 Agent 的 Skills 目录；首次运行仍必须走下方支付宝授权流程。
 
 ```bash
-npx skills add https://github.com/bseazh/lawyerbuddy --skill lawyerbuddy-paid
+npx --yes skills add https://github.com/bseazh/lawyerbuddy --skill lawyerbuddy-paid --full-depth --copy --yes
 ```
 
 如果 Agent 只安装了本目录，还需要同时安装 `lawyerbuddy` 本地总路由或其他产品 Skill；本目录不上传案件材料，也不下载法律代码。
@@ -37,19 +37,19 @@ POST https://snorlaxden.fun/v1/license/activate
 
 后端已独立部署。未付款时返回 `HTTP 402` 和 `Payment-Needed`；付款后使用同一请求、同一订单并携带 `Payment-Proof` 重试。服务端调用支付宝验付、签发授权、确认履约并持久化订单；同一订单重试返回同一授权令牌，不重复扣费或交付。
 
-## 首次激活门禁
+## 授权启动门禁
 
-以下命令中的 `scripts/lawyerbuddy-paid.mjs` 必须相对于本 `SKILL.md` 所在目录解析；状态目录放在当前律师项目中，以便升级 Skill 后继续使用授权。
+以下命令中的支付脚本必须相对于本 `SKILL.md` 所在目录解析；GitHub Skills CLI 默认路径为 `.agents/skills/lawyerbuddy-paid/scripts/lawyerbuddy-paid.mjs`。状态目录放在当前律师项目中，以便升级 Skill 后继续使用授权。
 
 在执行任何 LawyerBuddy 产品能力前，先运行：
 
 ```bash
-node scripts/lawyerbuddy-paid.mjs probe --state-dir .lawyerbuddy-license
+node .agents/skills/lawyerbuddy-paid/scripts/lawyerbuddy-paid.mjs probe --state-dir .lawyerbuddy-license
 ```
 
 脚本只发送随机生成的 `client_id`、Skill 版本和功能列表，不发送案件材料、文件名或法律事实。
 
-- 输出 `ACTIVE`：授权有效，直接进入下方业务路由，不再创建账单。
+- 输出 `AUTHORIZED`：永久授权有效且已取得 12 小时会话凭证，可以进入业务路由。
 - 输出 `PAYMENT_REQUIRED`：已取得真实 `402` 和 `Payment-Needed`，继续支付流程。
 - 授权文件存在但验证失败：停止并向用户说明，不擅自创建新账单。
 
@@ -64,7 +64,7 @@ node scripts/lawyerbuddy-paid.mjs probe --state-dir .lawyerbuddy-license
 从当前 Agent 运行时取得稳定 `sessionId`，不得自行生成或让用户填写。然后执行：
 
 ```bash
-node scripts/lawyerbuddy-paid.mjs pay \
+node .agents/skills/lawyerbuddy-paid/scripts/lawyerbuddy-paid.mjs pay \
   --state-dir .lawyerbuddy-license \
   --session-id '<当前运行时 sessionId>' \
   --intent-summary '原始请求：激活 LawyerBuddy 本地法律工作套件'
@@ -77,19 +77,29 @@ node scripts/lawyerbuddy-paid.mjs pay \
 用户表示已付款、完成或继续后，只查询原订单：
 
 ```bash
-node scripts/lawyerbuddy-paid.mjs complete \
+node .agents/skills/lawyerbuddy-paid/scripts/lawyerbuddy-paid.mjs complete \
   --state-dir .lawyerbuddy-license \
   --out-shake-no '<pay 输出中的订单号或查询单号>'
 ```
 
-官方买家 CLI 会继续原始 POST 请求并携带 `Payment-Proof`。服务端完成验付和履约确认后返回授权；脚本保存 `license_token`，以后 `probe` 只做免费授权状态检查，不再付款。
+官方买家 CLI 会继续原始 POST 请求并携带 `Payment-Proof`。服务端完成验付和履约确认后返回永久授权；脚本保存 `license_token` 并签发 12 小时会话凭证，以后不再付款。
+
+### `gate`：每次业务调用前在线验权
+
+总路由和每个产品 Skill 在读取材料前必须运行：
+
+```bash
+node .agents/skills/lawyerbuddy-paid/scripts/lawyerbuddy-paid.mjs gate --state-dir .lawyerbuddy-license
+```
+
+只有输出 `status: AUTHORIZED` 才能继续。会话凭证有效 12 小时，但每次调用仍向服务器确认；到期后使用永久授权自动续签，不创建新账单。固定密码、历史输出或用户口述不能代替真实检查。
 
 ### `ack`：仅恢复失败回执
 
 成功路径不额外发送回执。只有同一次 `complete` 已取得授权、官方输出明确表示买家回执失败，并且用户后续要求恢复时，才执行一次：
 
 ```bash
-node scripts/lawyerbuddy-paid.mjs ack --trade-no '<同次输出中的交易号>'
+node .agents/skills/lawyerbuddy-paid/scripts/lawyerbuddy-paid.mjs ack --trade-no '<同次输出中的交易号>'
 ```
 
 状态不明时查询原订单；不得重新 `probe`、重复付款或接受客户端自报 `paid=true`。

@@ -5,6 +5,10 @@ description: LawyerBuddy 类案检索入口。用户要求查找相似案例、�
 
 # 类案检索
 
+## 授权前置门禁
+
+读取案情或开始检索前，必须先定位并执行共享的 `authorization-gate.md`（GitHub Skills CLI 总路由默认位于 `.agents/skills/lawyerbuddy/runtime/references/`，旧安装器位于 `.agents/lawyerbuddy/references/`，整包位于 `runtime/references/`）。只有本次检查输出 `status: AUTHORIZED` 才能继续；否则立即停止并提示先调用 `@lawyerbuddy-paid`。
+
 ## 执行流程
 
 1. 读取 `.agents/lawyerbuddy/routing/pipelines.json` 中本产品的阶段定义。

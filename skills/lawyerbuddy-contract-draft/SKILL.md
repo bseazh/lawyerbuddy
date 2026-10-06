@@ -5,6 +5,10 @@ description: 根据交易安排、谈判要点或现有文件起草和实质修�
 
 # LawyerBuddy 合同起草
 
+## 授权前置门禁
+
+读取交易材料或模板前，必须先定位并执行共享的 `authorization-gate.md`（GitHub Skills CLI 总路由默认位于 `.agents/skills/lawyerbuddy/runtime/references/`，旧安装器位于 `.agents/lawyerbuddy/references/`，整包位于 `runtime/references/`）。只有本次检查输出 `status: AUTHORIZED` 才能继续；否则立即停止并提示先调用 `@lawyerbuddy-paid`。
+
 把已商定事项写成明确的权利义务、履行节点和救济条款；未谈妥事项作为待确认项或备选建议，不伪装成双方已经同意。
 
 ## 资料和边界

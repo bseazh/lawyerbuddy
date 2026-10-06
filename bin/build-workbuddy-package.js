@@ -68,9 +68,8 @@ for (const relative of listedFiles) {
   fs.copyFileSync(source, destination);
 }
 
-// WorkBuddy 上传包只提供本地法律工作能力。支付宝适配和服务器运行层
-// 保留在源码仓库，但不能随本地 Skill 包进入 Agent 工作区。
-for (const relative of ["skills/lawyerbuddy-paid", "services"]) {
+// 服务端部署代码不得进入客户端上传包；授权客户端必须随产品 Skill 一起安装。
+for (const relative of ["services"]) {
   fs.rmSync(path.join(folder, relative), { recursive: true, force: true });
 }
 
@@ -121,22 +120,13 @@ if (entries.some((entry) => path.basename(entry).toUpperCase() === "LICENSE")) {
   console.error("打包失败：ZIP 中发现不允许上传的 LICENSE 文件");
   process.exit(1);
 }
-const forbidden = [/snorlaxden/iu, /payment-proof/iu, /payment-needed/iu, /lawyerbuddy-paid\.zip/iu, /@alipay\/alipay-aipay/iu, /alipay-sdk/iu];
-const forbiddenFiles = folderEntries.filter((entry) => {
-  const location = path.join(folder, entry);
-  return forbidden.some((pattern) => pattern.test(fs.readFileSync(location).toString("utf8")));
-});
-if (forbiddenFiles.length) {
-  console.error(`打包失败：本地包包含远程付费或下载内容：${forbiddenFiles.join("、")}`);
-  process.exit(1);
-}
 console.log(JSON.stringify({
   folder,
   zip: archive,
   version: pkg.version,
   source_ref: "working-tree",
   root_skill: "SKILL.md",
-    excluded: ["examples/", "tests/", "skills/lawyerbuddy-paid/", "services/"],
+  excluded: ["examples/", "tests/", "services/"],
   entries: entries.length,
   size: fs.statSync(archive).size,
 }, null, 2));

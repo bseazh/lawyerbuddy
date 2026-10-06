@@ -5,6 +5,10 @@ description: LawyerBuddy 案件总结入口。用户已有经过确认并执行�
 
 # 案件总结
 
+## 授权前置门禁
+
+读取任何案件材料或旧报告前，必须先定位并执行共享的 `authorization-gate.md`（GitHub Skills CLI 总路由默认位于 `.agents/skills/lawyerbuddy/runtime/references/`，旧安装器位于 `.agents/lawyerbuddy/references/`，整包位于 `runtime/references/`）。只有本次检查输出 `status: AUTHORIZED` 才能继续；否则立即停止并提示先调用 `@lawyerbuddy-paid`。
+
 本 Skill 复用 `lawyerbuddy-sorting` 的报告规则和脚本。不得无条件信任既有摘要或执行 JSON；生成或更新报告前按本次处理深度核验材料范围、事实来源和事件关联。快速初稿不要求无关材料逐页读完，也不得擅自改写材料事实。
 
 ## 执行要求

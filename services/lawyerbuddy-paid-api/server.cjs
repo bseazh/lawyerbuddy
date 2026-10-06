@@ -10,6 +10,7 @@ const DATA_DIR = path.resolve(process.env.LAWYERBUDDY_DATA_DIR || path.join(ROOT
 const ORDERS_FILE = path.join(DATA_DIR, 'orders.json');
 const LICENSES_FILE = path.join(DATA_DIR, 'licenses.json');
 const SANDBOX_SERVICE_ID = 'api_mock_service_id';
+const SESSION_TTL_SECONDS = 12 * 60 * 60;
 
 function required(name) {
   const value = String(process.env[name] || '').trim();
@@ -92,7 +93,7 @@ function loadConfig() {
   const expectedMode = environment === 'production' ? 'alipay_production' : 'alipay_sandbox';
   if (mode !== expectedMode) throw new Error(`当前环境要求 PAYMENT_MODE=${expectedMode}`);
   const licenseSigning = loadLicenseSigningSecret();
-  const lawyerbuddyVersion = String(process.env.LAWYERBUDDY_VERSION || '1.9.1').trim();
+  const lawyerbuddyVersion = String(process.env.LAWYERBUDDY_VERSION || '1.9.3').trim();
   if (process.env.ALIPAY_CONFIG_SOURCE === 'sandbox_file') {
     if (environment !== 'sandbox') throw new Error('官方临时沙箱配置不能用于 production');
     const official = readOfficialSandboxConfig();
@@ -278,7 +279,15 @@ function licenseToken(config, license) {
   return `${content}.${b64urlBuffer(signature)}`;
 }
 
-function parseLicenseToken(config, token) {
+function signedToken(config, type, payload) {
+  const header = b64url(JSON.stringify({ alg: 'HS256', typ: type }));
+  const body = b64url(JSON.stringify(payload));
+  const content = `${header}.${body}`;
+  const signature = crypto.createHmac('sha256', config.licenseSigningSecret).update(content).digest();
+  return `${content}.${b64urlBuffer(signature)}`;
+}
+
+function parseSignedToken(config, token, expectedType) {
   const parts = String(token || '').split('.');
   if (parts.length !== 3) return null;
   const content = `${parts[0]}.${parts[1]}`;
@@ -290,9 +299,42 @@ function parseLicenseToken(config, token) {
   } catch { return null; }
   if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) return null;
   try {
+    const paddedHeader = parts[0].replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (parts[0].length % 4)) % 4);
     const paddedPayload = parts[1].replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (parts[1].length % 4)) % 4);
+    const header = JSON.parse(Buffer.from(paddedHeader, 'base64').toString('utf8'));
+    if (header.typ !== expectedType) return null;
     return JSON.parse(Buffer.from(paddedPayload, 'base64').toString('utf8'));
   } catch { return null; }
+}
+
+function parseLicenseToken(config, token) {
+  return parseSignedToken(config, token, 'LB-LICENSE');
+}
+
+function createSessionToken(config, license) {
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const expiresAt = issuedAt + SESSION_TTL_SECONDS;
+  return {
+    token: signedToken(config, 'LB-SESSION', {
+      iss: 'lawyerbuddy',
+      sub: license.licenseId,
+      client_id: license.clientId,
+      iat: issuedAt,
+      exp: expiresAt,
+      nonce: crypto.randomUUID()
+    }),
+    issuedAt,
+    expiresAt
+  };
+}
+
+function authorizedLicense(config, req) {
+  const authorization = String(req.header('Authorization') || '');
+  const token = String(req.body?.license_token || (authorization.match(/^Bearer\s+(.+)$/i)?.[1] || '')).trim();
+  const payload = parseLicenseToken(config, token);
+  const license = payload?.sub ? licenseRepository.findById(payload.sub) : null;
+  if (!license || license.licenseToken !== token) return null;
+  return license;
 }
 
 function createLicense(config, order) {
@@ -425,6 +467,9 @@ function createApp(options = {}) {
     environment: config.environment,
     service_id: config.serviceId,
     activation_endpoint: '/v1/license/activate',
+    session_endpoint: '/v1/license/session',
+    session_status_endpoint: '/v1/license/session/status',
+    session_ttl_seconds: SESSION_TTL_SECONDS,
     download_endpoint: 'disabled'
   }));
 
@@ -519,11 +564,8 @@ function createApp(options = {}) {
   });
 
   app.post('/v1/license/status', (req, res) => {
-    const authorization = String(req.header('Authorization') || '');
-    const token = String(req.body?.license_token || (authorization.match(/^Bearer\s+(.+)$/i)?.[1] || '')).trim();
-    const payload = parseLicenseToken(config, token);
-    const license = payload?.sub ? licenseRepository.findById(payload.sub) : null;
-    if (!license || license.licenseToken !== token) return res.status(401).json({ code: 'LICENSE_INVALID', message: '授权令牌无效' });
+    const license = authorizedLicense(config, req);
+    if (!license) return res.status(401).json({ code: 'LICENSE_INVALID', message: '授权令牌无效' });
     return res.json({
       active: true,
       license_id: license.licenseId,
@@ -532,6 +574,45 @@ function createApp(options = {}) {
       activated_at: license.activatedAt,
       expires_at: license.expiresAt,
       client_id: license.clientId
+    });
+  });
+
+  app.post('/v1/license/session', (req, res) => {
+    const license = authorizedLicense(config, req);
+    if (!license) return res.status(401).json({ code: 'LICENSE_INVALID', message: '请先完成永久授权激活' });
+    const clientId = String(req.body?.client_id || req.header('X-Client-Id') || '').trim();
+    if (!clientId || clientId !== license.clientId) {
+      return res.status(403).json({ code: 'CLIENT_MISMATCH', message: '授权与当前客户端不匹配' });
+    }
+    const session = createSessionToken(config, license);
+    return res.json({
+      active: true,
+      session_token: session.token,
+      issued_at: new Date(session.issuedAt * 1000).toISOString(),
+      expires_at: new Date(session.expiresAt * 1000).toISOString(),
+      ttl_seconds: SESSION_TTL_SECONDS,
+      client_id: license.clientId
+    });
+  });
+
+  app.post('/v1/license/session/status', (req, res) => {
+    const authorization = String(req.header('Authorization') || '');
+    const token = String(req.body?.session_token || (authorization.match(/^Bearer\s+(.+)$/i)?.[1] || '')).trim();
+    const payload = parseSignedToken(config, token, 'LB-SESSION');
+    const clientId = String(req.body?.client_id || req.header('X-Client-Id') || '').trim();
+    const now = Math.floor(Date.now() / 1000);
+    const license = payload?.sub ? licenseRepository.findById(payload.sub) : null;
+    if (!payload || !license || payload.client_id !== license.clientId || clientId !== license.clientId) {
+      return res.status(401).json({ code: 'SESSION_INVALID', message: '会话授权无效' });
+    }
+    if (!Number.isInteger(payload.exp) || payload.exp <= now) {
+      return res.status(401).json({ code: 'SESSION_EXPIRED', message: '会话授权已过期，请重新启动授权' });
+    }
+    return res.json({
+      active: true,
+      license_id: license.licenseId,
+      client_id: license.clientId,
+      expires_at: new Date(payload.exp * 1000).toISOString()
     });
   });
 
