@@ -1,6 +1,6 @@
 {
   "name": "lawyerbuddy-license-api",
-  "version": "1.9.4",
+  "version": "1.9.5",
   "private": true,
   "description": "LawyerBuddy 独立授权激活与支付宝 AI 付费服务",
   "type": "commonjs",

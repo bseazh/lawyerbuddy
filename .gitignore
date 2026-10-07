@@ -2,6 +2,7 @@
 ._*
 node_modules/
 .lawyerbuddy-env/
+.lawyerbuddy-license/
 .venv/
 .env/
 *.egg-info/

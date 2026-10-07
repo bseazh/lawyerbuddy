@@ -117,6 +117,42 @@ class SuiteStructureTest(unittest.TestCase):
         self.assertNotIn("NODE_TLS_REJECT_UNAUTHORIZED", source)
         self.assertNotIn("--insecure", source)
 
+    def test_paid_skill_explains_buyer_wallet_and_safe_order_retry(self) -> None:
+        paid_skill = (ROOT / "skills" / "lawyerbuddy-paid" / "SKILL.md").read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+        for text in (paid_skill, readme):
+            self.assertIn("卖家/收款方", text)
+            self.assertIn("买家/付款方", text)
+            self.assertIn("买家和卖家不能相同", text)
+        self.assertIn("alipay-bot check-wallet", paid_skill)
+        self.assertIn("BIZ_ORDER_NOT_FOUND", paid_skill)
+        self.assertIn(".lawyerbuddy-license/", gitignore)
+
+        import subprocess
+
+        script = ROOT / "skills" / "lawyerbuddy-paid" / "scripts" / "lawyerbuddy-paid.mjs"
+        check = subprocess.run(
+            [
+                "node",
+                "--input-type=module",
+                "--eval",
+                (
+                    f"import {{ isReusablePendingOrder }} from {json.dumps(script.as_uri())};"
+                    "const now=Date.now();"
+                    "console.log(JSON.stringify(["
+                    "isReusablePendingOrder({out_trade_no:'x',resource_url:'https://example.com',created_at:new Date(now-60000).toISOString()},now),"
+                    "isReusablePendingOrder({out_trade_no:'x',resource_url:'https://example.com',created_at:new Date(now-1800000).toISOString()},now)"
+                    "]));"
+                ),
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        self.assertEqual(json.loads(check.stdout), [True, False])
+
     def test_user_guide_covers_document_drafting_and_is_linked(self) -> None:
         guide = (ROOT / "docs" / "使用指南.md").read_text(encoding="utf-8")
         readme = (ROOT / "README.md").read_text(encoding="utf-8")

@@ -15,7 +15,8 @@ const RESOURCE_URL = `${PRIMARY_ORIGIN}${RESOURCE_PATH}`;
 const STATUS_URL = 'https://snorlaxden.fun/v1/license/status';
 const SESSION_URL = 'https://snorlaxden.fun/v1/license/session';
 const SESSION_STATUS_URL = 'https://snorlaxden.fun/v1/license/session/status';
-const SKILL_VERSION = '1.9.4';
+const SKILL_VERSION = '1.9.5';
+const PENDING_ORDER_REUSE_MS = 25 * 60 * 1000;
 const FEATURES = [
   'sorting', 'summarizing', 'timeline', 'similar-case-retrieval',
   'complaint-draft', 'document-drafting', 'contract-draft', 'contract-review'
@@ -210,11 +211,43 @@ function newOutTradeNo() {
   return `LBORDER_${Date.now()}_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
 }
 
-async function probe(directory) {
+export function isReusablePendingOrder(state, now = Date.now()) {
+  if (!state || typeof state !== 'object') return false;
+  if (!state.out_trade_no || !state.resource_url || !state.created_at) return false;
+  const createdAt = Date.parse(state.created_at);
+  return Number.isFinite(createdAt) && now >= createdAt && now - createdAt < PENDING_ORDER_REUSE_MS;
+}
+
+function explicitNewOrder(options) {
+  const value = options['new-order'];
+  if (value === undefined) return false;
+  if (value !== 'true') fail('--new-order 只接受 true；仅在原订单明确不存在、关闭或过期后使用');
+  return true;
+}
+
+function reusePendingOrder(directory, options) {
+  if (explicitNewOrder(options)) return false;
+  const state = readJson(path.join(directory, 'request.json'), false);
+  const paymentFile = path.join(directory, 'payment-needed.txt');
+  if (!isReusablePendingOrder(state) || !fs.existsSync(paymentFile)) return false;
+  console.log(JSON.stringify({
+    status: 'PAYMENT_REQUIRED',
+    http_status: 402,
+    reused: true,
+    out_trade_no: state.out_trade_no,
+    amount: state.amount,
+    currency: state.currency,
+    payment_needed_file: paymentFile
+  }, null, 2));
+  return true;
+}
+
+async function probe(directory, options) {
   const active = await checkStoredLicense(directory);
   if (active) {
     return gate(directory);
   }
+  if (reusePendingOrder(directory, options)) return;
 
   const paymentResourceUrl = await compatiblePaymentUrl();
   if (paymentResourceUrl.startsWith(COMPATIBLE_ORIGIN)) await verifyCompatibleOrigin();
@@ -275,6 +308,20 @@ function requireAlipayBot() {
   if (result.error || result.status !== 0) fail(result.stderr || result.error?.message || 'alipay-bot 无法运行');
 }
 
+function requireBuyerWallet() {
+  requireAlipayBot();
+  const result = spawnSync('alipay-bot', ['check-wallet'], { encoding: 'utf8', maxBuffer: 1024 * 1024 });
+  if (result.error) fail(result.error.message);
+  const combined = `${result.stdout || ''}${result.stderr || ''}`;
+  let parsed = null;
+  try { parsed = JSON.parse(String(result.stdout || '').trim()); } catch { /* official non-JSON response */ }
+  if (result.status === 0 && parsed?.code === 200 && parsed?.message === '已开启支付宝支付功能') return;
+  if (combined.includes('未开通') || parsed?.status === 'applied_unbound') {
+    fail('BUYER_WALLET_REQUIRED：请先使用买家/付款方支付宝账号开启支付功能；买家和卖家不能相同。');
+  }
+  fail('BUYER_WALLET_CHECK_FAILED：暂时无法确认买家钱包状态，本次未发起付款，请稍后重试。', 4);
+}
+
 function requestArgs(state) {
   return [
     '--resource-url', state.resource_url,
@@ -302,6 +349,7 @@ function isProxyTargetBlocked(result) {
 async function pay(directory, options) {
   if (!options['session-id']) fail('缺少当前运行时的 --session-id');
   if (!options['intent-summary']?.startsWith('原始请求：')) fail('--intent-summary 必须说明原始业务目的');
+  requireBuyerWallet();
   let state = readJson(path.join(directory, 'request.json'));
   state = await preparePaymentRoute(directory, state);
   const paymentFile = path.join(directory, 'payment-needed.txt');
@@ -392,7 +440,7 @@ async function main() {
       console.log(JSON.stringify({ status: 'ACTIVE', license: active }, null, 2));
       return;
     }
-    return probe(directory);
+    return probe(directory, options);
   }
   if (command === 'pay') return pay(directory, options);
   return complete(directory, options);

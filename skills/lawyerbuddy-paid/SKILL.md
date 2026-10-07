@@ -2,7 +2,7 @@
 name: lawyerbuddy-paid
 description: 面向律师的付费本地法律工作助手。首次使用通过支付宝 AI 按量付费接口完成 0.01 元永久授权激活；激活后本地执行案件材料整理、总结、时间轴、类案检索、文书和合同工作，不重复收费。
 metadata:
-  version: "1.9.4"
+  version: "1.9.5"
   payment:
     protocol: "HTTP 402"
     price: "0.01 CNY"
@@ -57,9 +57,22 @@ node .agents/skills/lawyerbuddy-paid/scripts/lawyerbuddy-paid.mjs probe --state-
 
 ## 支付流程
 
+### 支付前先确认买家钱包
+
+创建账单前先执行 `alipay-bot check-wallet`。只有官方结果明确显示“已开启支付宝支付功能”才继续；未开启时执行 `alipay-bot apply-wallet --agent-name 'LawyerBuddy'`，并把官方链接或二维码原样交给用户。
+
+必须用以下语言向用户说明账号角色：
+
+- **卖家/收款方**：LawyerBuddy 服务所属支付宝商家账号，保持不变，不负责扫码付款。
+- **买家/付款方**：用户用于支付 0.01 元的支付宝账号，必须与卖家不是同一账号；开通支付功能和最终付款都由买家账号完成。
+
+用户表示开通完成后再次执行 `alipay-bot check-wallet`，确认成功后才运行 `probe`。不得只凭用户口述、页面已打开或二维码已扫描推断钱包可用。
+
+若官方支付结果为“买家和卖家不能相同”，停止当前订单，不重复支付；明确要求改用另一买家账号。不得扫描支付宝内部文件、修改设备标识、手工删除钱包凭证或让普通用户反复切换 DNS、代理和系统配置。官方钱包管理页无法解绑时，保留订单信息并按支付宝官方反馈流程处理。
+
 ### `probe`：取得 402 账单
 
-`probe` 保存原始 POST 请求、订单号和 `Payment-Needed`，权限为 `0600`。不得解码、改写或伪造账单。
+`probe` 保存原始 POST 请求、订单号和 `Payment-Needed`，权限为 `0600`。不得解码、改写或伪造账单。25 分钟内已经存在未完成订单时自动沿用该订单。只有官方查询明确返回订单不存在、订单关闭或账单已过期，并取得用户明确同意后，才执行 `probe --new-order true` 创建新订单。
 
 ### `pay`：交给官方买家支付能力
 
@@ -78,7 +91,7 @@ node .agents/skills/lawyerbuddy-paid/scripts/lawyerbuddy-paid.mjs pay \
 
 ### `complete`：携带凭证重试并取得授权
 
-用户表示已付款、完成或继续后，只查询原订单：
+用户表示已付款、完成或继续后，只查询原订单。支付链接过期也先查询原订单，不直接重新 `probe`：
 
 ```bash
 node .agents/skills/lawyerbuddy-paid/scripts/lawyerbuddy-paid.mjs complete \
@@ -106,7 +119,7 @@ node .agents/skills/lawyerbuddy-paid/scripts/lawyerbuddy-paid.mjs gate --state-d
 node .agents/skills/lawyerbuddy-paid/scripts/lawyerbuddy-paid.mjs ack --trade-no '<同次输出中的交易号>'
 ```
 
-状态不明时查询原订单；不得重新 `probe`、重复付款或接受客户端自报 `paid=true`。
+状态不明时查询原订单；不得重新 `probe`、重复付款或接受客户端自报 `paid=true`。只有查询明确返回 `BIZ_ORDER_NOT_FOUND`、订单已关闭或账单已过期，且用户明确同意重新下单时，才重新执行 `probe` 和 `pay`。
 
 ## 业务路由
 
