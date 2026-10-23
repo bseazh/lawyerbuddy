@@ -2,7 +2,7 @@
 name: lawyerbuddy-paid
 description: 面向律师的付费本地法律工作助手。首次使用通过支付宝 AI 按量付费接口完成 0.01 元永久授权激活；激活后本地执行案件材料整理、总结、时间轴、类案检索、文书和合同工作，不重复收费。
 metadata:
-  version: "1.9.5"
+  version: "1.9.7"
   payment:
     protocol: "HTTP 402"
     price: "0.01 CNY"
@@ -95,9 +95,14 @@ node .agents/skills/lawyerbuddy-paid/scripts/lawyerbuddy-paid.mjs pay \
 
 ```bash
 node .agents/skills/lawyerbuddy-paid/scripts/lawyerbuddy-paid.mjs complete \
-  --state-dir .lawyerbuddy-license \
-  --out-shake-no '<pay 输出中的订单号或查询单号>'
+  --state-dir .lawyerbuddy-license
 ```
+
+脚本会从本次 `pay` 输出中自动取支付宝查询单号；官方输出只有交易号时自动改用 `--trade-no`。需要手工指定时只能传 `--out-shake-no '<支付宝查询单号>'` 或 `--trade-no '<支付宝交易号>'`。
+
+- `LBORDER_` 开头的是 LawyerBuddy 商户订单号，**不能**作为 `--out-shake-no` 或 `--trade-no`，脚本会直接拒绝。
+- 官方返回 `SYSTEM_ERROR：查询支付凭证失败` 时，先核对查询参数是否为支付宝查询单号或交易号；不得据此判定服务端故障，也不得用同一错误参数反复重试。
+- 返回 `PAYMENT_QUERY_CREDENTIAL_UNAVAILABLE` 时，说明当前环境未绑定买家钱包，应回到完成付款的同一 Agent 环境中执行 `complete`。
 
 官方买家 CLI 会继续原始 POST 请求并携带 `Payment-Proof`。服务端完成验付和履约确认后返回永久授权；脚本保存 `license_token` 并签发 12 小时会话凭证，以后不再付款。
 

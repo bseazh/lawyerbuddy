@@ -153,6 +153,42 @@ class SuiteStructureTest(unittest.TestCase):
         )
         self.assertEqual(json.loads(check.stdout), [True, False])
 
+    def test_complete_uses_alipay_query_number_not_merchant_order(self) -> None:
+        import subprocess
+
+        script = ROOT / "skills" / "lawyerbuddy-paid" / "scripts" / "lawyerbuddy-paid.mjs"
+        resolve = (
+            f"import {{ resolvePaymentQuery }} from {json.dumps(script.as_uri())};"
+            "const out='**交易号**：20261023008283124939440000244949';"
+            "console.log(JSON.stringify(["
+            "resolvePaymentQuery({}, out),"
+            "resolvePaymentQuery({'out-shake-no':'SHAKE123456789'}, out),"
+            "resolvePaymentQuery({}, 'out_shake_no: SHK20261023ABCDEF\\n交易号：20261023008283124939440000244949')"
+            "]));"
+        )
+        check = subprocess.run(
+            ["node", "--input-type=module", "--eval", resolve],
+            cwd=ROOT, capture_output=True, text=True, check=True,
+        )
+        self.assertEqual(json.loads(check.stdout), [
+            ["--trade-no", "20261023008283124939440000244949"],
+            ["--out-shake-no", "SHAKE123456789"],
+            ["--out-shake-no", "SHK20261023ABCDEF"],
+        ])
+        rejected = subprocess.run(
+            [
+                "node", "--input-type=module", "--eval",
+                f"import {{ resolvePaymentQuery }} from {json.dumps(script.as_uri())};"
+                "resolvePaymentQuery({'out-shake-no':'LBORDER_1792730990662_9d7859ee11da445d'}, '');",
+            ],
+            cwd=ROOT, capture_output=True, text=True,
+        )
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn("商户订单号", rejected.stderr)
+        paid_skill = (ROOT / "skills" / "lawyerbuddy-paid" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertNotIn("订单号或查询单号", paid_skill)
+        self.assertIn("SYSTEM_ERROR", paid_skill)
+
     def test_user_guide_covers_document_drafting_and_is_linked(self) -> None:
         guide = (ROOT / "docs" / "使用指南.md").read_text(encoding="utf-8")
         readme = (ROOT / "README.md").read_text(encoding="utf-8")

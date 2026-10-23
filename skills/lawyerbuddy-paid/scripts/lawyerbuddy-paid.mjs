@@ -15,7 +15,7 @@ const RESOURCE_URL = `${PRIMARY_ORIGIN}${RESOURCE_PATH}`;
 const STATUS_URL = 'https://snorlaxden.fun/v1/license/status';
 const SESSION_URL = 'https://snorlaxden.fun/v1/license/session';
 const SESSION_STATUS_URL = 'https://snorlaxden.fun/v1/license/session/status';
-const SKILL_VERSION = '1.9.5';
+const SKILL_VERSION = '1.9.7';
 const PENDING_ORDER_REUSE_MS = 25 * 60 * 1000;
 const FEATURES = [
   'sorting', 'summarizing', 'timeline', 'similar-case-retrieval',
@@ -381,20 +381,38 @@ function extractLicenseToken(output) {
   return match?.[1] || '';
 }
 
+export function resolvePaymentQuery(options, paymentOutput = '') {
+  const shakeNo = String(options['out-shake-no'] || '').trim();
+  const tradeNo = String(options['trade-no'] || '').trim();
+  if (/^LBORDER_/i.test(shakeNo) || /^LBORDER_/i.test(tradeNo)) {
+    fail('LBORDER_ 开头的是 LawyerBuddy 商户订单号，不能用于支付宝查询；请改用 pay 输出中的查询单号或交易号，或不带参数直接运行 complete。');
+  }
+  if (shakeNo) return ['--out-shake-no', shakeNo];
+  if (tradeNo) return ['--trade-no', tradeNo];
+  const text = String(paymentOutput).replaceAll('*', '');
+  const shake = text.match(/(?:out_shake_no|outShakeNo|查询单号)["'\s]*[:：=]\s*["']?([A-Za-z0-9_-]{8,})/i);
+  if (shake && !/^LBORDER_/i.test(shake[1])) return ['--out-shake-no', shake[1]];
+  const trade = text.match(/(?:trade_no|tradeNo|交易号)["'\s]*[:：=]\s*["']?(\d{16,})/i);
+  if (trade) return ['--trade-no', trade[1]];
+  fail('未在 pay 输出中找到查询单号或交易号；请把官方支付结果中的“交易号”通过 --trade-no 传入。');
+}
+
 async function complete(directory, options) {
-  if (!options['out-shake-no']) fail('缺少 --out-shake-no；请使用 pay 输出中的订单号或查询单号');
+  const paymentOutputFile = path.join(directory, 'payment-output.txt');
+  const paymentOutput = fs.existsSync(paymentOutputFile) ? fs.readFileSync(paymentOutputFile, 'utf8') : '';
+  const queryArgs = resolvePaymentQuery(options, paymentOutput);
   let state = readJson(path.join(directory, 'request.json'));
   state = await preparePaymentRoute(directory, state);
   let result = runAlipay([
     '402-query-payment-status',
-    '--out-shake-no', options['out-shake-no'],
+    ...queryArgs,
     ...requestArgs(state)
   ], directory, 'completion-output.txt');
   if (isProxyTargetBlocked(result) && state.resource_url === RESOURCE_URL) {
     state = await preparePaymentRoute(directory, state, true);
     result = runAlipay([
       '402-query-payment-status',
-      '--out-shake-no', options['out-shake-no'],
+      ...queryArgs,
       ...requestArgs(state)
     ], directory, 'completion-output.txt');
   }

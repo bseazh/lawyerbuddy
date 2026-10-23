@@ -4,6 +4,12 @@
 
 - 暂无。
 
+## 1.9.7
+
+- 修复付款后验付失败：`complete` 不再要求 Agent 手填查询号，自动从本次 `pay` 输出中读取支付宝查询单号，缺失时改用交易号 `--trade-no`。
+- 拒绝把 `LBORDER_` 商户订单号当作支付宝查询号，避免出现 `SYSTEM_ERROR：查询支付凭证失败` 并被误判为服务端故障。
+- `SKILL.md` 补充 `SYSTEM_ERROR` 与 `PAYMENT_QUERY_CREDENTIAL_UNAVAILABLE` 的正确处理方式。
+
 ## 1.9.5
 
 - 首次付款前强制确认买家钱包状态，并明确区分卖家/收款方与买家/付款方。
