@@ -11,12 +11,25 @@
 ```json
 {
   "client_id": "设备或用户标识",
-  "skill_version": "1.9.7",
+  "skill_version": "1.10.0",
   "features": ["sorting", "summarizing", "timeline"]
 }
 ```
 
 首次请求没有 `Payment-Proof`，返回 `HTTP 402`、`Payment-Needed` 和 `out_trade_no`。付款后使用相同请求体和订单号重试，并携带官方产生的 `Payment-Proof`。验付和履约成功后返回 `license_id`、签名 `license_token`、版本、功能、激活时间和 `Payment-Validation`。
+
+### `POST /v1/license/reconcile`
+
+用于“支付宝已扣款，但买家侧查询凭证丢失或返回 `SYSTEM_ERROR`”的恢复。请求体与 `activate` 相同，并额外携带：
+
+```json
+{
+  "out_trade_no": "LBORDER_...",
+  "trade_no": "支付宝交易号"
+}
+```
+
+服务端先校验订单号和 `client_id` / 版本 / 功能列表与创建订单时一致，再以商户身份调用 `alipay.trade.query`。如果当前应用没有该接口权限（`40006 Insufficient Permissions`），改用 `alipay.aipay.agent.fulfillment.confirm` 校验交易号：未付款或不存在的交易返回 `TRADE_NOT_FOUND`，已付款交易返回成功或“已履约”状态。能取得交易详情时还会校验金额、收款商家和交易号。只有交易已付款且匹配时才签发永久授权。重复对账返回同一 `license_token`，不会重复扣款。默认启用，可用 `ALIPAY_TRADE_RECONCILE=false` 关闭。
 
 ### `POST /v1/license/status`
 
@@ -39,7 +52,7 @@
 复制 `.env.example` 为 `.env`，填写支付宝环境变量和版本号：
 
 ```text
-LAWYERBUDDY_VERSION=1.9.7
+LAWYERBUDDY_VERSION=1.10.0
 ```
 
 如果未设置 `LICENSE_SIGNING_SECRET_FILE`，服务首次启动会自动生成 `data/license-signing-secret`，权限为 `0600`，后续部署继续使用同一文件。请随服务器数据一并备份。也可以显式指定独立密钥文件：
@@ -64,7 +77,7 @@ npm start
 ```bash
 curl -i -X POST http://127.0.0.1:3000/v1/license/activate \
   -H 'Content-Type: application/json' \
-  -d '{"client_id":"local-test","skill_version":"1.9.7","features":["sorting"]}'
+  -d '{"client_id":"local-test","skill_version":"1.10.0","features":["sorting"]}'
 ```
 
 预期返回 `HTTP 402` 和 `Payment-Needed`。旧下载接口应返回 `410`。真实付款、验付和履约只能通过支付宝官方买家流程完成；未实际付款时不能称为正式支付测试通过。
@@ -78,7 +91,7 @@ curl -i -X POST http://127.0.0.1:3000/v1/license/activate \
 ```bash
 export LB_DEPLOY_HOST=ubuntu@snorlaxden.fun
 export LB_SERVER_DIR=/home/ubuntu/Project/lawyerbuddy-api
-export LB_RELEASE_VERSION=1.9.7
+export LB_RELEASE_VERSION=1.10.0
 export LB_SSH_KEY=/绝对路径/lawyerbuddy_paid_deploy_ed25519
 ./services/lawyerbuddy-paid-api/deploy-production.sh
 ```

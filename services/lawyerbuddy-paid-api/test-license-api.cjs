@@ -35,19 +35,38 @@ async function main() {
       ALIPAY_SERVICE_ID: 'api_mock_service_id',
       LICENSE_SIGNING_SECRET_FILE: secretFile,
       LAWYERBUDDY_DATA_DIR: path.join(temporary, 'data'),
-      LAWYERBUDDY_VERSION: '1.9.7'
+      LAWYERBUDDY_VERSION: '1.10.0'
     });
 
     const payment = { outTradeNo: '', resourceId: '' };
+    const trade = { status: 'TRADE_SUCCESS', amount: '0.01', sellerId: '2088000000000000', tradeNo: '20261023008283124939440000244949', queryAllowed: true, confirmFound: true, confirmAlreadyFulfilled: false };
     const sdk = {
-      async exec(method) {
+      async exec(method, request) {
         if (method === 'alipay.aipay.agent.payment.verify') {
           return {
             code: '10000', active: true, trade_no: 'ALIPAY_TEST_TRADE',
             out_trade_no: payment.outTradeNo, amount: '0.01', resource_id: payment.resourceId
           };
         }
-        if (method === 'alipay.aipay.agent.fulfillment.confirm') return { code: '10000' };
+        if (method === 'alipay.trade.query') {
+          if (!trade.queryAllowed) {
+            return { code: '40006', msg: 'Insufficient Permissions', sub_code: 'isv.insufficient-isv-permissions' };
+          }
+          return {
+            code: '10000', trade_no: trade.tradeNo,
+            out_trade_no: request?.bizContent?.out_trade_no || payment.outTradeNo,
+            trade_status: trade.status, total_amount: trade.amount, seller_id: trade.sellerId
+          };
+        }
+        if (method === 'alipay.aipay.agent.fulfillment.confirm') {
+          if (!trade.confirmFound) {
+            return { code: '40004', subCode: 'TRADE_NOT_FOUND', subMsg: '交易不存在' };
+          }
+          if (trade.confirmAlreadyFulfilled) {
+            return { code: '40004', subCode: 'TRADE_STATUS_INVALID', subMsg: '交易状态不允许履约' };
+          }
+          return { code: '10000', tradeNo: request?.bizContent?.trade_no || 'ALIPAY_TEST_TRADE' };
+        }
         throw new Error(`unexpected Alipay method: ${method}`);
       }
     };
@@ -58,7 +77,7 @@ async function main() {
       server.once('error', reject);
     });
     const base = `http://127.0.0.1:${server.address().port}`;
-    const body = { client_id: 'local-test', skill_version: '1.9.7', features: ['sorting', 'timeline'] };
+    const body = { client_id: 'local-test', skill_version: '1.10.0', features: ['sorting', 'timeline'] };
 
     const health = await request(base, '/health');
     assert.equal(health.status, 200);
@@ -124,6 +143,140 @@ async function main() {
     assert.equal(activatedAgain.status, 200);
     assert.equal(activatedAgain.body.license_token, activated.body.license_token);
     assert.equal(activatedAgain.body.already_activated, true);
+
+    const reconcileBody = { client_id: 'reconcile-client', skill_version: '1.10.0', features: ['sorting'] };
+    const reconcileOrder = await request(base, '/v1/license/activate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Out-Trade-No': 'LBORDER_1792730990662_reconcile01' },
+      body: JSON.stringify(reconcileBody)
+    });
+    assert.equal(reconcileOrder.status, 402, JSON.stringify(reconcileOrder.body));
+    const reconciled = await request(base, '/v1/license/reconcile', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Out-Trade-No': reconcileOrder.body.out_trade_no,
+        'X-Trade-No': trade.tradeNo
+      },
+      body: JSON.stringify({ ...reconcileBody, out_trade_no: reconcileOrder.body.out_trade_no, trade_no: trade.tradeNo })
+    });
+    assert.equal(reconciled.status, 200, JSON.stringify(reconciled.body));
+    assert.ok(reconciled.body.license_token);
+    assert.equal(reconciled.body.fulfillment_confirmed, true);
+    assert.equal(reconciled.body.already_activated, false);
+    assert.equal(reconciled.body.trade_no, trade.tradeNo);
+
+    const reconciledAgain = await request(base, '/v1/license/reconcile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Out-Trade-No': reconcileOrder.body.out_trade_no },
+      body: JSON.stringify({ ...reconcileBody, out_trade_no: reconcileOrder.body.out_trade_no, trade_no: trade.tradeNo })
+    });
+    assert.equal(reconciledAgain.status, 200);
+    assert.equal(reconciledAgain.body.license_token, reconciled.body.license_token);
+    assert.equal(reconciledAgain.body.already_activated, true);
+
+    const reconcileMismatch = await request(base, '/v1/license/reconcile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Out-Trade-No': reconcileOrder.body.out_trade_no },
+      body: JSON.stringify({ ...reconcileBody, client_id: 'another-client', out_trade_no: reconcileOrder.body.out_trade_no })
+    });
+    assert.equal(reconcileMismatch.status, 409);
+
+    const reconcileInvalidTradeNo = await request(base, '/v1/license/reconcile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Out-Trade-No': reconcileOrder.body.out_trade_no },
+      body: JSON.stringify({ ...reconcileBody, out_trade_no: reconcileOrder.body.out_trade_no, trade_no: reconcileOrder.body.out_trade_no })
+    });
+    assert.equal(reconcileInvalidTradeNo.status, 400);
+
+    trade.status = 'WAIT_BUYER_PAY';
+    const unpaidBody = { client_id: 'unpaid-client', skill_version: '1.10.0', features: ['timeline'] };
+    const unpaidOrder = await request(base, '/v1/license/activate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Out-Trade-No': 'LBORDER_1792730990662_unpaid001' },
+      body: JSON.stringify(unpaidBody)
+    });
+    assert.equal(unpaidOrder.status, 402);
+    const unpaid = await request(base, '/v1/license/reconcile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Out-Trade-No': unpaidOrder.body.out_trade_no },
+      body: JSON.stringify({ ...unpaidBody, out_trade_no: unpaidOrder.body.out_trade_no })
+    });
+    assert.equal(unpaid.status, 402);
+    assert.equal(unpaid.body.code, 'TRADE_NOT_PAID');
+    trade.status = 'TRADE_SUCCESS';
+
+    trade.amount = '0.02';
+    const amountBody = { client_id: 'amount-client', skill_version: '1.10.0', features: ['sorting', 'timeline'] };
+    const amountOrder = await request(base, '/v1/license/activate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Out-Trade-No': 'LBORDER_1792730990662_amount01' },
+      body: JSON.stringify(amountBody)
+    });
+    assert.equal(amountOrder.status, 402);
+    const amountMismatch = await request(base, '/v1/license/reconcile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Out-Trade-No': amountOrder.body.out_trade_no },
+      body: JSON.stringify({ ...amountBody, out_trade_no: amountOrder.body.out_trade_no })
+    });
+    assert.equal(amountMismatch.status, 409);
+    assert.equal(amountMismatch.body.code, 'TRADE_AMOUNT_MISMATCH');
+    trade.amount = '0.01';
+
+    trade.queryAllowed = false;
+    trade.confirmFound = true;
+    const fallbackBody = { client_id: 'fallback-client', skill_version: '1.10.0', features: ['sorting'] };
+    const fallbackOrder = await request(base, '/v1/license/activate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Out-Trade-No': 'LBORDER_1792730990662_fallback1' },
+      body: JSON.stringify(fallbackBody)
+    });
+    assert.equal(fallbackOrder.status, 402);
+    const fallback = await request(base, '/v1/license/reconcile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Out-Trade-No': fallbackOrder.body.out_trade_no },
+      body: JSON.stringify({ ...fallbackBody, out_trade_no: fallbackOrder.body.out_trade_no, trade_no: trade.tradeNo })
+    });
+    assert.equal(fallback.status, 200, JSON.stringify(fallback.body));
+    assert.equal(fallback.body.verified_by, 'fulfillment_confirm');
+    assert.equal(fallback.body.fulfillment_confirmed, true);
+    assert.ok(fallback.body.license_token);
+
+    trade.queryAllowed = false;
+    trade.confirmAlreadyFulfilled = true;
+    const alreadyFulfilledBody = { client_id: 'already-fulfilled-client', skill_version: '1.10.0', features: ['sorting'] };
+    const alreadyFulfilledOrder = await request(base, '/v1/license/activate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Out-Trade-No': 'LBORDER_1792730990662_fallback3' },
+      body: JSON.stringify(alreadyFulfilledBody)
+    });
+    assert.equal(alreadyFulfilledOrder.status, 402);
+    const alreadyFulfilled = await request(base, '/v1/license/reconcile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Out-Trade-No': alreadyFulfilledOrder.body.out_trade_no },
+      body: JSON.stringify({ ...alreadyFulfilledBody, out_trade_no: alreadyFulfilledOrder.body.out_trade_no, trade_no: trade.tradeNo })
+    });
+    assert.equal(alreadyFulfilled.status, 200, JSON.stringify(alreadyFulfilled.body));
+    assert.equal(alreadyFulfilled.body.verified_by, 'fulfillment_confirm');
+    trade.confirmAlreadyFulfilled = false;
+
+    trade.confirmFound = false;
+    const unpaidFallbackBody = { client_id: 'fallback-unpaid-client', skill_version: '1.10.0', features: ['timeline'] };
+    const unpaidFallbackOrder = await request(base, '/v1/license/activate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Out-Trade-No': 'LBORDER_1792730990662_fallback2' },
+      body: JSON.stringify(unpaidFallbackBody)
+    });
+    assert.equal(unpaidFallbackOrder.status, 402);
+    const unpaidFallback = await request(base, '/v1/license/reconcile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Out-Trade-No': unpaidFallbackOrder.body.out_trade_no },
+      body: JSON.stringify({ ...unpaidFallbackBody, out_trade_no: unpaidFallbackOrder.body.out_trade_no, trade_no: trade.tradeNo })
+    });
+    assert.equal(unpaidFallback.status, 402);
+    assert.equal(unpaidFallback.body.code, 'TRADE_NOT_PAID');
+    trade.queryAllowed = true;
+    trade.confirmFound = true;
 
     const validLicense = await request(base, '/v1/license/status', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ license_token: activated.body.license_token })

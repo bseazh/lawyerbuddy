@@ -20,7 +20,7 @@ LawyerBuddy 是面向律师的授权制本地法律工作助手。它提供一�
 
 npx --yes skills add https://github.com/bseazh/lawyerbuddy --skill lawyerbuddy lawyerbuddy-paid --full-depth --copy --yes
 npx -y @alipay/alipay-aipay@latest install
-npx -y --registry=https://registry.npmjs.org @alipay/agent-payment@1.0.23 install-cli
+npx -y --registry=https://registry.npmjs.org @alipay/agent-payment@1.0.28 install-cli
 ```
 
 ### 第二步：首次激活
@@ -47,6 +47,13 @@ npx -y --registry=https://registry.npmjs.org @alipay/agent-payment@1.0.23 instal
 支付脚本会自动处理 Clash 等代理软件的 Fake-IP 环境；用户无需修改 DNS、`hosts` 或代理设置。支付链接失效或网络中断时，重新调用 `@lawyerbuddy-paid` 会先查询原订单。只有支付宝明确返回订单不存在、已关闭或账单过期，并由用户同意重新下单，才创建新订单。
 
 钱包绑定异常时，Agent 不应要求律师手工删除支付宝内部凭证、修改设备标识或反复切换代理配置；应保留订单号并使用支付宝官方管理或问题反馈流程。
+
+支付卡住时优先按这两类处理：
+
+- 提示“当前账号尚未开启支付功能”：用买家账号在当前对话直接说“开启支付宝支付功能”，按支付宝官方页面完成开通；已经申请过就不要重复申请，提交 6 位授权码后让 Agent 检查钱包状态，不要重复提交。
+- 提示“买家和卖家不能相同”：当前登录的就是 LawyerBuddy 收款商家账号，不能作为买家付款。请换用另一个支付宝账号作为买家；原订单会自动作废，换号后重新调用 `@lawyerbuddy-paid` 即可，不要继续用旧支付链接。
+
+付款后不要再次下单；先让 Agent 查询原订单。若已扣款但买家侧返回 `SYSTEM_ERROR：查询支付凭证失败` 或 `PAYMENT_QUERY_CREDENTIAL_UNAVAILABLE`，使用 `recover` 按交易号做商户侧对账，不要重新付款。完整错误处理表见 `skills/lawyerbuddy-paid/SKILL.md` 的“常见支付问题与处理”。
 
 ### 第三步：开始使用
 
@@ -228,9 +235,10 @@ npm run pack:skillhub:paid
 
 ```bash
 npx --yes skills update lawyerbuddy lawyerbuddy-paid --project --yes
+npx -y --registry=https://registry.npmjs.org @alipay/agent-payment@1.0.28 install-cli
 ```
 
-更新后重新调用 `@lawyerbuddy-paid` 检查授权，再调用 `@lawyerbuddy`。维护者发布新版本后应重新运行打包命令，并先用一份测试案件验证目录树预览、归档结果、案件报告和时间轴。
+更新后重新调用 `@lawyerbuddy-paid` 检查授权，再调用 `@lawyerbuddy`。首次激活或更换买家账号时，先让 `wallet` 返回 `BUYER_WALLET_READY`；已有永久授权的用户不会重复收费。维护者发布新版本后应重新运行打包命令，并先用一份测试案件验证目录树预览、归档结果、案件报告和时间轴。
 
 ## 隐私与授权
 

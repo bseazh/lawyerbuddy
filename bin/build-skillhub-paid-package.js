@@ -118,7 +118,7 @@ try {
   const paymentScript = path.join(bundle, 'scripts', 'lawyerbuddy-paid.mjs');
   if (!fs.existsSync(paymentScript)) throw new Error('付费包缺少可执行支付编排脚本');
   const paymentPackage = JSON.parse(fs.readFileSync(path.join(bundle, 'package.json'), 'utf8'));
-  if (paymentPackage.peerDependencies?.['@alipay/agent-payment'] !== '1.0.23') {
+  if (paymentPackage.peerDependencies?.['@alipay/agent-payment'] !== '1.0.28') {
     throw new Error('付费包缺少固定版本的官方买家支付依赖');
   }
 

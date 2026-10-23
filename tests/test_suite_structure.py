@@ -85,7 +85,7 @@ class SuiteStructureTest(unittest.TestCase):
             "alipay.aipay.agent.payment.verify", "alipay.aipay.agent.fulfillment.confirm", "订单持久化与幂等",
         ):
             self.assertIn(signal, skill)
-        self.assertEqual(package["peerDependencies"]["@alipay/agent-payment"], "1.0.23")
+        self.assertEqual(package["peerDependencies"]["@alipay/agent-payment"], "1.0.28")
 
     def test_payment_client_routes_fake_ip_without_disabling_security(self) -> None:
         import subprocess

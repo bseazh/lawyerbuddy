@@ -1,10 +1,10 @@
 {
   "name": "lawyerbuddy-skillhub-paid",
-  "version": "1.9.7",
+  "version": "1.10.0",
   "private": true,
   "description": "LawyerBuddy SkillHub 付费激活客户端",
   "type": "module",
   "peerDependencies": {
-    "@alipay/agent-payment": "1.0.23"
+    "@alipay/agent-payment": "1.0.28"
   }
 }

@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 : "${LB_DEPLOY_HOST:?请设置 LB_DEPLOY_HOST，例如 ubuntu@snorlaxden.fun}"
 : "${LB_SERVER_DIR:?请设置 LB_SERVER_DIR，例如 /home/ubuntu/Project/lawyerbuddy-api}"
-: "${LB_RELEASE_VERSION:?请设置 LB_RELEASE_VERSION，例如 1.9.7}"
+: "${LB_RELEASE_VERSION:?请设置 LB_RELEASE_VERSION，例如 1.10.0}"
 
 repo_dir="$(cd "$(dirname "$0")" && pwd)"
 [[ "$LB_RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
@@ -95,6 +95,12 @@ if [[ "$health_ready" != "1" ]]; then
   rollback
   exit 1
 fi
+health_json="$(curl --fail --silent --show-error https://snorlaxden.fun/health)"
+grep -q '"/v1/license/reconcile"' <<<"$health_json" || {
+  echo "健康接口未声明交易对账恢复接口" >&2
+  rollback
+  exit 1
+}
 download_status="$(curl --silent --output /dev/null --write-out '%{http_code}' https://snorlaxden.fun/v1/skill/download)"
 [[ "$download_status" == "410" ]] || {
   echo "旧下载接口状态异常：$download_status" >&2

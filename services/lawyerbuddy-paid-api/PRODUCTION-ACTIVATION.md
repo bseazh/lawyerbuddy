@@ -4,6 +4,7 @@
 
 ```text
 POST https://snorlaxden.fun/v1/license/activate
+POST https://snorlaxden.fun/v1/license/reconcile
 POST https://snorlaxden.fun/v1/license/status
 POST https://snorlaxden.fun/v1/license/session
 POST https://snorlaxden.fun/v1/license/session/status
@@ -15,7 +16,7 @@ GET  https://snorlaxden.fun/v1/skill/download → 410
 生产配置除支付宝参数外，应设置当前版本：
 
 ```text
-LAWYERBUDDY_VERSION=1.9.7
+LAWYERBUDDY_VERSION=1.10.0
 ```
 
 为兼容使用 Fake-IP DNS 的终端，生产服务器同时提供 `https://134.175.154.244`。该入口必须使用公开 CA 签发、包含公网 IP SAN 的证书；不得使用自签名证书或关闭 TLS 校验。当前证书由 Certbot 的 `shortlived` 配置自动续期，续期钩子复制证书到 Caddy 可读目录并重新加载 Caddy。域名入口仍是默认入口，客户端仅在检测到受限 DNS 或官方 CLI 明确返回 `PROXY_TARGET_BLOCKED` 时切换。

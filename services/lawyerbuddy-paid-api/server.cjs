@@ -93,7 +93,7 @@ function loadConfig() {
   const expectedMode = environment === 'production' ? 'alipay_production' : 'alipay_sandbox';
   if (mode !== expectedMode) throw new Error(`当前环境要求 PAYMENT_MODE=${expectedMode}`);
   const licenseSigning = loadLicenseSigningSecret();
-  const lawyerbuddyVersion = String(process.env.LAWYERBUDDY_VERSION || '1.9.7').trim();
+  const lawyerbuddyVersion = String(process.env.LAWYERBUDDY_VERSION || '1.10.0').trim();
   if (process.env.ALIPAY_CONFIG_SOURCE === 'sandbox_file') {
     if (environment !== 'sandbox') throw new Error('官方临时沙箱配置不能用于 production');
     const official = readOfficialSandboxConfig();
@@ -106,7 +106,8 @@ function loadConfig() {
       gateway: process.env.ALIPAY_GATEWAY || 'https://openapi-sandbox.dl.alipaydev.com/gateway.do',
       licenseSigningSecret: licenseSigning.secret,
       licenseSigningSecretFile: licenseSigning.file,
-      lawyerbuddyVersion
+      lawyerbuddyVersion,
+      allowTradeReconcile: String(process.env.ALIPAY_TRADE_RECONCILE || 'true') !== 'false'
     };
   }
   const privateKeyFile = required('ALIPAY_APP_PRIVATE_KEY_FILE');
@@ -133,7 +134,8 @@ function loadConfig() {
     signingKey: rawPkcs1PrivateKey(privateKeyFile),
     licenseSigningSecret: licenseSigning.secret,
     licenseSigningSecretFile: licenseSigning.file,
-    lawyerbuddyVersion
+    lawyerbuddyVersion,
+    allowTradeReconcile: String(process.env.ALIPAY_TRADE_RECONCILE || 'true') !== 'false'
   };
 }
 
@@ -196,12 +198,13 @@ const orderRepository = {
     writeOrders(orders);
     return { state: 'PENDING_CONFIRM', serviceResult: order.serviceResult };
   },
-  markFulfilled(outTradeNo, tradeNo) {
+  markFulfilled(outTradeNo, tradeNo, fulfillmentConfirmed = true) {
     const orders = readOrders();
     if (!orders[outTradeNo]) return;
     orders[outTradeNo].fulfillStatus = 'FULFILLED';
     orders[outTradeNo].orderStatus = 'PAID';
     orders[outTradeNo].tradeNo = tradeNo;
+    orders[outTradeNo].fulfillmentConfirmed = fulfillmentConfirmed === true;
     orders[outTradeNo].fulfilledAt = new Date().toISOString();
     writeOrders(orders);
   }
@@ -450,10 +453,173 @@ async function verifyProof(config, sdk, proof, expectedOutTradeNo = '') {
   };
 }
 
-async function confirmFulfillment(config, sdk, tradeNo) {
+async function confirmFulfillmentResult(config, sdk, tradeNo) {
   const response = await sdk.exec('alipay.aipay.agent.fulfillment.confirm', { bizContent: { trade_no: tradeNo } });
-  const data = response.alipay_aipay_agent_fulfillment_confirm_response || response;
+  return response.alipay_aipay_agent_fulfillment_confirm_response || response;
+}
+
+async function confirmFulfillment(config, sdk, tradeNo) {
+  const data = await confirmFulfillmentResult(config, sdk, tradeNo);
   return String(data.code) === '10000';
+}
+
+async function queryPaidTrade(config, sdk, order, requestedTradeNo = '') {
+  let data = null;
+  let queryFailure = null;
+  try {
+    const response = await sdk.exec('alipay.trade.query', { bizContent: { out_trade_no: order.outTradeNo } });
+    data = response.alipay_trade_query_response || response;
+  } catch (error) {
+    queryFailure = error;
+    console.error(`支付宝交易查询异常：${error.message}`);
+  }
+
+  if (data && String(data.code) === '10000') {
+    const tradeStatus = String(data.trade_status || '').toUpperCase();
+    if (!['TRADE_SUCCESS', 'TRADE_FINISHED'].includes(tradeStatus)) {
+      return {
+        error: true,
+        status: 402,
+        code: 'TRADE_NOT_PAID',
+        message: `支付宝交易状态为 ${tradeStatus || 'UNKNOWN'}，尚未确认付款成功`
+      };
+    }
+    if (String(data.out_trade_no || '') !== order.outTradeNo) {
+      return {
+        error: true,
+        status: 409,
+        code: 'TRADE_ORDER_MISMATCH',
+        message: '支付宝交易对应的商户订单号与本地订单不一致'
+      };
+    }
+    if (amount(data.total_amount) !== amount(order.amount)) {
+      return {
+        error: true,
+        status: 409,
+        code: 'TRADE_AMOUNT_MISMATCH',
+        message: '支付宝交易金额与订单金额不一致'
+      };
+    }
+    if (config.sellerId && String(data.seller_id || '') && String(data.seller_id) !== String(config.sellerId)) {
+      return {
+        error: true,
+        status: 409,
+        code: 'TRADE_SELLER_MISMATCH',
+        message: '支付宝交易收款商家与当前服务配置不一致'
+      };
+    }
+    const tradeNo = String(data.trade_no || requestedTradeNo || '').trim();
+    if (!tradeNo) {
+      return {
+        error: true,
+        status: 502,
+        code: 'TRADE_QUERY_INCOMPLETE',
+        message: '支付宝交易查询结果缺少交易号，无法完成履约'
+      };
+    }
+    if (requestedTradeNo && String(data.trade_no || '') && String(data.trade_no) !== requestedTradeNo) {
+      return {
+        error: true,
+        status: 409,
+        code: 'TRADE_NO_MISMATCH',
+        message: '提交的交易号与支付宝查询结果不一致'
+      };
+    }
+    return {
+      error: false,
+      tradeNo,
+      outTradeNo: order.outTradeNo,
+      tradeStatus,
+      amount: data.total_amount,
+      verifiedBy: 'trade_query',
+      fulfillmentConfirmed: false
+    };
+  }
+
+  const reason = `${data?.sub_code || ''} ${data?.sub_msg || ''} ${data?.msg || ''} ${queryFailure?.message || ''}`;
+  const queryUnavailable = Boolean(queryFailure)
+    || String(data?.code || '') === '40006'
+    || String(data?.code || '') === '20000'
+    || /insufficient.*permission|权限不足/i.test(reason);
+
+  // The production app may only have the AI-pay permissions, not the legacy
+  // alipay.trade.query permission. In that case, confirmation of the trade
+  // through the AI-pay fulfillment API is the seller-side proof: it returns
+  // TRADE_NOT_FOUND for unpaid or invalid trade numbers and succeeds only for
+  // a trade that belongs to this service.
+  if (requestedTradeNo && queryUnavailable) {
+    try {
+      const confirmed = await confirmFulfillmentResult(config, sdk, requestedTradeNo);
+      if (String(confirmed.code) === '10000') {
+        console.error(`支付宝交易查询权限不足，已通过履约确认校验交易：${requestedTradeNo}`);
+        return {
+          error: false,
+          tradeNo: requestedTradeNo,
+          outTradeNo: order.outTradeNo,
+          tradeStatus: 'TRADE_SUCCESS',
+          amount: order.amount,
+          verifiedBy: 'fulfillment_confirm',
+          fulfillmentConfirmed: true
+        };
+      }
+      const confirmReason = `${confirmed.subCode || ''} ${confirmed.subMsg || ''} ${confirmed.msg || ''}`;
+      if (/TRADE_STATUS_INVALID|交易状态不允许履约/i.test(confirmReason)) {
+        // A paid trade that was already fulfilled (for example by an earlier
+        // recovery attempt) cannot be confirmed again. Treat it as a valid,
+        // already-fulfilled trade so the local license can still be delivered.
+        console.error(`支付宝交易已履约，按已付款交易恢复：${requestedTradeNo}`);
+        return {
+          error: false,
+          tradeNo: requestedTradeNo,
+          outTradeNo: order.outTradeNo,
+          tradeStatus: 'TRADE_SUCCESS',
+          amount: order.amount,
+          verifiedBy: 'fulfillment_confirm',
+          fulfillmentConfirmed: true
+        };
+      }
+      if (/TRADE_NOT_FOUND|TRADE_NO_INVALID|交易不存在|订单号格式有误/i.test(confirmReason)) {
+        return {
+          error: true,
+          status: 402,
+          code: 'TRADE_NOT_PAID',
+          message: '支付宝侧尚未确认该交易已付款，或交易号不存在'
+        };
+      }
+      console.error(`支付宝履约确认校验失败：${confirmReason.trim()}`);
+      return {
+        error: true,
+        status: 502,
+        code: 'TRADE_QUERY_FAILED',
+        message: '支付宝交易校验暂时不可用，请稍后用同一订单重试对账'
+      };
+    } catch (error) {
+      console.error(`支付宝履约确认校验异常：${error.message}`);
+      return {
+        error: true,
+        status: 502,
+        code: 'TRADE_QUERY_FAILED',
+        message: '支付宝交易校验暂时不可用，请稍后用同一订单重试对账'
+      };
+    }
+  }
+
+  if (data) {
+    const notFound = String(data.code) === '40004' || /TRADE_NOT_EXIST|ORDER_NOT_EXIST|TRADE_NOT_FOUND/i.test(`${data.sub_code || ''} ${data.sub_msg || ''}`);
+    console.error(`支付宝交易查询未成功：code=${data.code || ''}; sub_code=${data.sub_code || ''}; msg=${data.sub_msg || data.msg || ''}`);
+    return {
+      error: true,
+      status: notFound ? 404 : 502,
+      code: notFound ? 'TRADE_NOT_FOUND' : 'TRADE_QUERY_FAILED',
+      message: notFound ? '支付宝侧未找到该订单，无法对账' : '支付宝交易查询未成功，请稍后用同一订单重试对账'
+    };
+  }
+  return {
+    error: true,
+    status: 502,
+    code: 'TRADE_QUERY_FAILED',
+    message: '支付宝交易查询暂时不可用，请稍后用同一订单重试对账'
+  };
 }
 
 function createApp(options = {}) {
@@ -467,13 +633,15 @@ function createApp(options = {}) {
     environment: config.environment,
     service_id: config.serviceId,
     activation_endpoint: '/v1/license/activate',
+    reconcile_endpoint: '/v1/license/reconcile',
+    trade_reconcile_enabled: config.allowTradeReconcile,
     session_endpoint: '/v1/license/session',
     session_status_endpoint: '/v1/license/session/status',
     session_ttl_seconds: SESSION_TTL_SECONDS,
     download_endpoint: 'disabled'
   }));
 
-  function deliverLicense(res, order, fulfillment, verified, alreadyActivated) {
+  function deliverLicense(res, order, fulfillment, verified, alreadyActivated, fulfillmentConfirmed = true) {
     const license = fulfillment.serviceResult || licenseRepository.findByOrder(order.outTradeNo);
     if (!license?.licenseToken) return res.status(500).json({ code: 'LICENSE_NOT_CREATED', message: '授权结果未生成，请使用同一订单重试' });
     res.set('Payment-Validation', b64url(JSON.stringify({
@@ -481,7 +649,8 @@ function createApp(options = {}) {
       out_trade_no: order.outTradeNo,
       validated: true,
       fulfilled: true,
-      resource_id: order.resourceId
+      resource_id: order.resourceId,
+      verified_by: verified.verifiedBy || 'payment_proof'
     })));
     return res.json({
       license_id: license.licenseId,
@@ -493,7 +662,8 @@ function createApp(options = {}) {
       client_id: license.clientId,
       out_trade_no: order.outTradeNo,
       trade_no: verified.tradeNo,
-      fulfillment_confirmed: true,
+      verified_by: verified.verifiedBy || 'payment_proof',
+      fulfillment_confirmed: fulfillmentConfirmed === true,
       already_activated: alreadyActivated
     });
   }
@@ -560,6 +730,77 @@ function createApp(options = {}) {
     } catch (error) {
       console.error(`支付接口错误：${error.message}`);
       return res.status(500).json({ code: 'INTEGRATION_ERROR', message: '授权接口暂不可用' });
+    }
+  });
+
+  app.post('/v1/license/reconcile', async (req, res) => {
+    if (!config.allowTradeReconcile) {
+      return res.status(404).json({ code: 'RECONCILE_DISABLED', message: '服务端未启用交易对账恢复' });
+    }
+    try {
+      const activation = activationRequest(req, config);
+      if (activation.error) return res.status(400).json({ code: 'INVALID_REQUEST', message: activation.error });
+      const requestValue = activation.value;
+      const requestedOrder = requestedOutTradeNo(req);
+      if (requestedOrder.error) return res.status(400).json({ code: 'INVALID_ORDER_NO', message: requestedOrder.error });
+      const outTradeNo = requestedOrder.value;
+      if (!outTradeNo) return res.status(400).json({ code: 'ORDER_NO_REQUIRED', message: '缺少商户订单号' });
+      const order = orderRepository.findByOutTradeNo(outTradeNo);
+      if (!order) return res.status(404).json({ code: 'ORDER_NOT_FOUND', message: '服务端未找到该订单' });
+      const sameRequest = order.requestHash === hashRequest(requestValue)
+        || (order.activation
+          && order.activation.clientId === requestValue.clientId
+          && order.activation.skillVersion === requestValue.skillVersion
+          && JSON.stringify([...(order.activation.features || [])].sort()) === JSON.stringify(requestValue.features));
+      if (!sameRequest) {
+        return res.status(409).json({ code: 'ORDER_REQUEST_MISMATCH', message: '订单已绑定其他授权请求' });
+      }
+      if (['INVALID', 'CANCELLED', 'REFUNDED'].includes(String(order.orderStatus || '').toUpperCase())) {
+        return res.status(409).json({ code: 'ORDER_NOT_PAYABLE', message: '该订单已失效或退款，不能用于授权恢复' });
+      }
+      const requestedTradeNo = String(req.body?.trade_no || req.header('X-Trade-No') || '').trim();
+      if (requestedTradeNo && !/^\d{16,64}$/.test(requestedTradeNo)) {
+        return res.status(400).json({ code: 'INVALID_TRADE_NO', message: 'trade_no 格式不正确' });
+      }
+      const existingLicense = licenseRepository.findByOrder(outTradeNo);
+      if (order.fulfillStatus === 'FULFILLED' && existingLicense) {
+        const tradeNo = order.tradeNo || requestedTradeNo || '';
+        let confirmed = order.fulfillmentConfirmed !== false;
+        if (!confirmed && tradeNo) {
+          try {
+            confirmed = await confirmFulfillment(config, sdk, tradeNo);
+            if (confirmed) orderRepository.markFulfilled(outTradeNo, tradeNo, true);
+          } catch (error) {
+            console.error(`支付宝履约确认重试失败：${error.message}`);
+          }
+        }
+        return deliverLicense(res, order, { state: 'FULFILLED', serviceResult: existingLicense }, { tradeNo, verifiedBy: 'reconcile' }, true, confirmed);
+      }
+      const trade = await queryPaidTrade(config, sdk, order, requestedTradeNo);
+      if (trade.error) {
+        return res.status(trade.status || 502).json({ code: trade.code, message: trade.message });
+      }
+      const fulfillment = orderRepository.prepareFulfillment({
+        outTradeNo,
+        createResource: () => createLicense(config, order)
+      });
+      if (!fulfillment) return res.status(404).json({ code: 'ORDER_NOT_FOUND', message: '服务端未找到该订单' });
+      if (fulfillment.state === 'FULFILLED') {
+        return deliverLicense(res, order, fulfillment, trade, true, order.fulfillmentConfirmed !== false);
+      }
+      let confirmed = trade.fulfillmentConfirmed === true;
+      if (!confirmed) {
+        try {
+          confirmed = await confirmFulfillment(config, sdk, trade.tradeNo);
+        } catch (error) {
+          console.error(`支付宝履约确认失败，先交付授权：${error.message}`);
+        }
+      }
+      orderRepository.markFulfilled(outTradeNo, trade.tradeNo, confirmed);
+      return deliverLicense(res, order, fulfillment, trade, false, confirmed);
+    } catch (error) {
+      console.error(`交易对账接口错误：${error.message}`);
+      return res.status(500).json({ code: 'INTEGRATION_ERROR', message: '交易对账接口暂不可用' });
     }
   });
 
